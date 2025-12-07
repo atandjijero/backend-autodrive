@@ -23,15 +23,42 @@ export class ReservationService {
     private vehicleModel: Model<VehicleDocument>,
   ) {}
 
+  //  Génère un numéro unique de réservation
+  private generateReservationNumber(): string {
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    return `RES-${date}-${random}`;
+  }
+
+  // Vérifie si la réservation est expirée et met à jour automatiquement
+  private async checkAndUpdateStatus(reservation: ReservationDocument) {
+    const now = new Date();
+
+    if (
+      reservation.statut === StatutReservation.EnCours &&
+      reservation.dateFin < now
+    ) {
+      reservation.statut = StatutReservation.Terminee;
+      await reservation.save();
+
+      // Libérer le véhicule
+      const vehicle = await this.vehicleModel.findById(reservation.vehicleId);
+      if (vehicle) {
+        vehicle.disponible = true;
+        await vehicle.save();
+      }
+    }
+
+    return reservation;
+  }
+
   async create(data: CreateReservationDto): Promise<Reservation> {
     try {
-      // Vérifier que le véhicule existe et est disponible
       const vehicle = await this.vehicleModel.findById(data.vehicleId).exec();
       if (!vehicle || vehicle.deleted || !vehicle.disponible) {
         throw new BadRequestException('Véhicule non disponible');
       }
 
-      // Vérifier chevauchement de dates
       const overlap = await this.reservationModel.findOne({
         vehicleId: new Types.ObjectId(data.vehicleId),
         statut: StatutReservation.EnCours,
@@ -46,18 +73,20 @@ export class ReservationService {
         );
       }
 
-      // Validation automatique
+      // Génération du numéro de réservation
+      const numeroReservation = this.generateReservationNumber();
+
       const reservation = new this.reservationModel({
         vehicleId: new Types.ObjectId(data.vehicleId),
         clientId: new Types.ObjectId(data.clientId),
         dateDebut: data.dateDebut,
         dateFin: data.dateFin,
         statut: StatutReservation.EnCours,
+        numeroReservation, 
       });
 
       const savedReservation = await reservation.save();
 
-      // Mettre le véhicule en indisponible automatiquement
       vehicle.disponible = false;
       await vehicle.save();
 
@@ -70,23 +99,35 @@ export class ReservationService {
   }
 
   async findAll(): Promise<Reservation[]> {
-    try {
-      return this.reservationModel
-        .find()
-        .populate('vehicleId')
-        .populate('clientId')
-        .exec();
-    } catch (error) {
-      throw new InternalServerErrorException(
-        `Erreur lors de la récupération des réservations: ${error.message}`,
-      );
-    }
+  try {
+    const reservations = await this.reservationModel
+      .find()
+      .populate('vehicleId')
+      .populate('clientId')
+      .exec();
+
+    return Promise.all(reservations.map(r => this.checkAndUpdateStatus(r)));
+  } catch (error) {
+    console.error("🔥 ERREUR FINDALL :", error); 
+    throw new InternalServerErrorException(
+      `Erreur lors de la récupération des réservations: ${error.message}`,
+    );
   }
+}
+
 
   async findById(id: string): Promise<Reservation> {
-    const reservation = await this.reservationModel.findById(id).exec();
-    if (!reservation) throw new NotFoundException('Réservation non trouvée');
-    return reservation;
+    const reservation = await this.reservationModel
+      .findById(id)
+      .populate('vehicleId')
+      .populate('clientId')
+      .exec();
+
+    if (!reservation) {
+      throw new NotFoundException('Réservation non trouvée');
+    }
+
+    return this.checkAndUpdateStatus(reservation);
   }
 
   async updateStatut(id: string, statut: StatutReservation): Promise<Reservation> {
@@ -96,7 +137,6 @@ export class ReservationService {
 
     if (!reservation) throw new NotFoundException('Réservation non trouvée');
 
-    // Si la réservation est terminée ou annulée → rendre le véhicule disponible
     if (
       statut === StatutReservation.Terminee ||
       statut === StatutReservation.Annulee
@@ -115,7 +155,6 @@ export class ReservationService {
     const reservation = await this.reservationModel.findByIdAndDelete(id).exec();
     if (!reservation) throw new NotFoundException('Réservation non trouvée');
 
-    // Libérer le véhicule si la réservation est supprimée
     const vehicle = await this.vehicleModel.findById(reservation.vehicleId).exec();
     if (vehicle) {
       vehicle.disponible = true;

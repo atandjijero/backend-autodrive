@@ -12,10 +12,10 @@ export enum StatutReservation {
 @Schema({ collection: 'reservations', timestamps: true })
 export class Reservation {
   @Prop({ type: Types.ObjectId, ref: 'Vehicle', required: true })
-  vehicleId: Types.ObjectId;
+  vehicleId: Types.ObjectId | any;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  clientId: Types.ObjectId;
+  clientId: Types.ObjectId | any;
 
   @Prop({ required: true })
   dateDebut: Date;
@@ -25,6 +25,8 @@ export class Reservation {
 
   @Prop({ enum: StatutReservation, default: StatutReservation.EnCours })
   statut: StatutReservation;
+  @Prop({ required: true, unique: true })
+  numeroReservation: string;
 }
 
 export const ReservationSchema = SchemaFactory.createForClass(Reservation);

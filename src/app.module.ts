@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from './auth/auth.module';
 import { VehiculesModule } from './modules/vehicules/vehicules.module';
 import { ReservationModule } from './modules/reservations/reservation.module';
+import { PaiementsModule } from './modules/paiements/paiments.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -16,7 +17,8 @@ import { ReservationModule } from './modules/reservations/reservation.module';
     }),
     AuthModule,
     VehiculesModule,
-    ReservationModule
+    ReservationModule,
+    PaiementsModule,
   ],
   controllers: [],
   providers: [],

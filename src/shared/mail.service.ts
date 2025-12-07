@@ -80,4 +80,57 @@ export class MailService implements OnModuleInit {
       `,
     });
   }
+  /**
+ * Envoi confirmation de paiement + localisation Google Maps
+ */
+async sendPaymentConfirmation(to: string, name: string, amount: number) {
+  const googleMapsUrl = "https://maps.app.goo.gl/FyWEczQtLVD5CrvSA";
+
+  await this.transporter.sendMail({
+    from: `"AutoDrive Paiement" <${process.env.MAIL_USER}>`,
+    to,
+    subject: 'Confirmation de paiement - AutoDrive',
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #333;">
+        <h2 style="color:#004080;">Paiement confirmé !</h2>
+
+        <p>Bonjour <strong>${name}</strong>,</p>
+
+        <p>
+          Nous vous confirmons que votre paiement de 
+          <strong>${amount} €</strong> a été effectué avec succès.
+        </p>
+
+        <h3 style="color:#004080;"> Votre véhicule vous attend</h3>
+        <p>
+          Vous pouvez maintenant vous rendre à notre agence pour récupérer votre voiture.
+        </p>
+
+        <h3 style="color:#004080;">📍 Adresse de l'agence :</h3>
+        <p>
+          <strong>AutoDrive - Agence principale</strong><br/>
+          Rue de l'Aéroport, Lomé, Togo<br/>
+          Téléphone : +228 90 00 00 00
+        </p>
+
+        <p style="margin: 20px 0;">
+          
+          <a href="${googleMapsUrl}" 
+             target="_blank" 
+             style="background:#004080; color:#fff; padding:10px 20px; text-decoration:none; border-radius:5px;">
+            Voir sur Google Maps
+          </a>
+        </p>
+
+        <p>
+          Merci de vous présenter avec une pièce d'identité valide et votre numéro de réservation.
+        </p>
+
+        <br/>
+        <p>Cordialement,<br/>L'équipe AutoDrive</p>
+      </div>
+    `,
+  });
+}
+
 }
