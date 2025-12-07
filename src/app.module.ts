@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { VehiculesModule } from './modules/vehicules/vehicules.module';
 import { ReservationModule } from './modules/reservations/reservation.module';
 import { PaiementsModule } from './modules/paiements/paiments.module';
+import { StatsModule } from './modules/clients/stats/stats.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -19,6 +20,7 @@ import { PaiementsModule } from './modules/paiements/paiments.module';
     VehiculesModule,
     ReservationModule,
     PaiementsModule,
+    StatsModule,
   ],
   controllers: [],
   providers: [],

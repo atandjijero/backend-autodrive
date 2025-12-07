@@ -107,9 +107,58 @@ export class VehiclesController {
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateVehicleDto) {
-    return this.vehiclesService.update(id, dto);
+@UseGuards(AdminGuard)
+@UseInterceptors(
+  FileInterceptor('file', {
+    storage: diskStorage({
+      destination: './uploads/vehicles',
+      filename: VehiclesController.filename,
+    }),
+    fileFilter: VehiclesController.imageFileFilter,
+  }),
+)
+@ApiConsumes('multipart/form-data')
+@ApiBody({
+  schema: {
+    type: 'object',
+    properties: {
+      carrosserie: { type: 'string' },
+      modele: { type: 'string' },
+      marque: { type: 'string' },
+      transmission: { type: 'string', enum: ['manuelle', 'automatique'] },
+      prix: { type: 'number' },
+      immatriculation: { type: 'string' },
+      photos: { type: 'array', items: { type: 'string' } }, // URLs existantes
+      file: { type: 'string', format: 'binary' }, // nouvelle photo optionnelle
+    },
+  },
+})
+async update(
+  @Param('id') id: string,
+  @UploadedFile() file: Express.Multer.File,
+  @Body() dto: UpdateVehicleDto,
+) {
+  let newPhotoUrl: string | undefined;
+
+  //  Si un fichier est envoyé, on génère son URL
+  if (file) {
+    const serverUrl = this.configService.get<string>('SERVER_URL') || 'http://localhost:9000';
+    newPhotoUrl = `${serverUrl}/uploads/vehicles/${file.filename}`;
   }
+
+  //  Fusion des anciennes photos + nouvelle photo
+  const updatedPhotos = [
+    ...(dto.photos ?? []), // anciennes photos envoyées par le frontend
+    ...(newPhotoUrl ? [newPhotoUrl] : []), // nouvelle photo uploadée
+  ];
+
+  return this.vehiclesService.update(id, {
+    ...dto,
+    photos: updatedPhotos,
+  });
+}
+
+
 
   @Put(':id/unavailable')
   @UseGuards(AdminGuard)
