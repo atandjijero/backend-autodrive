@@ -108,7 +108,7 @@ export class ReservationService {
 
     return Promise.all(reservations.map(r => this.checkAndUpdateStatus(r)));
   } catch (error) {
-    console.error("🔥 ERREUR FINDALL :", error); 
+    console.error(" ERREUR FINDALL :", error); 
     throw new InternalServerErrorException(
       `Erreur lors de la récupération des réservations: ${error.message}`,
     );
