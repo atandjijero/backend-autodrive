@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsMongoId, IsDateString } from 'class-validator';
+import { IsMongoId, IsDateString, IsOptional, IsString } from 'class-validator';
 
 export class CreateReservationDto {
   @ApiProperty({
@@ -29,4 +29,13 @@ export class CreateReservationDto {
   })
   @IsDateString()
   dateFin: string;
+
+  @ApiProperty({
+    description: 'Code promo à appliquer (optionnel)',
+    example: 'HIVER2026',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  codePromo?: string;
 }

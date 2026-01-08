@@ -26,7 +26,7 @@ import { ConfigService } from '@nestjs/config';
 @ApiTags('vehicles')
 @ApiBearerAuth()
 @Controller('vehicles')
-@UseGuards(JwtAuthGuard) // tous les endpoints nécessitent un JWT valide
+//@UseGuards(JwtAuthGuard) 
 export class VehiclesController {
   constructor(
     private readonly vehiclesService: VehiclesService,
@@ -53,6 +53,7 @@ export class VehiclesController {
 
   @Post()
   @UseGuards(AdminGuard)
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -108,6 +109,7 @@ export class VehiclesController {
 
   @Put(':id')
 @UseGuards(AdminGuard)
+@UseGuards(JwtAuthGuard)
 @UseInterceptors(
   FileInterceptor('file', {
     storage: diskStorage({
@@ -162,6 +164,7 @@ async update(
 
   @Put(':id/unavailable')
   @UseGuards(AdminGuard)
+  @UseGuards(JwtAuthGuard)
   async markUnavailable(@Param('id') id: string) {
     return this.vehiclesService.markUnavailable(id);
   }

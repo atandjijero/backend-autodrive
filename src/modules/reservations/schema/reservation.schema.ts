@@ -25,8 +25,12 @@ export class Reservation {
 
   @Prop({ enum: StatutReservation, default: StatutReservation.EnCours })
   statut: StatutReservation;
+
   @Prop({ required: true, unique: true })
   numeroReservation: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'Promotion' })
+  promotionId?: Types.ObjectId; // Promotion appliquée lors de la réservation
 }
 
 export const ReservationSchema = SchemaFactory.createForClass(Reservation);

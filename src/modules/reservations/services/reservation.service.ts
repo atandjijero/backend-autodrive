@@ -13,6 +13,7 @@ import {
 } from 'src/modules/reservations/schema/reservation.schema';
 import { Vehicle, VehicleDocument } from 'src/modules/vehicules/schemas/vehicule.schema';
 import { CreateReservationDto } from 'src/modules/reservations/dto/create-reservation.dto';
+import { PromotionsService } from 'src/modules/promotions/services/promotions.service';
 
 @Injectable()
 export class ReservationService {
@@ -21,6 +22,7 @@ export class ReservationService {
     private reservationModel: Model<ReservationDocument>,
     @InjectModel(Vehicle.name)
     private vehicleModel: Model<VehicleDocument>,
+    private promotionsService: PromotionsService,
   ) {}
 
   //  Génère un numéro unique de réservation
@@ -76,13 +78,24 @@ export class ReservationService {
       // Génération du numéro de réservation
       const numeroReservation = this.generateReservationNumber();
 
+      // Gestion de la promotion si code promo fourni
+      let promotionId: Types.ObjectId | undefined;
+      if (data.codePromo) {
+        const promotion = await this.promotionsService.findByCode(data.codePromo);
+        if (!promotion) {
+          throw new BadRequestException('Code promo invalide ou expiré');
+        }
+        promotionId = promotion._id;
+      }
+
       const reservation = new this.reservationModel({
         vehicleId: new Types.ObjectId(data.vehicleId),
         clientId: new Types.ObjectId(data.clientId),
         dateDebut: data.dateDebut,
         dateFin: data.dateFin,
         statut: StatutReservation.EnCours,
-        numeroReservation, 
+        numeroReservation,
+        promotionId,
       });
 
       const savedReservation = await reservation.save();

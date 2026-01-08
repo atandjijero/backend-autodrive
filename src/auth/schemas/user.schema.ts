@@ -64,6 +64,7 @@ export class User {
 
   @Prop({ type: Date, default: null }) 
   deletedAt?: Date | null;
+  @Prop({ type: [String], default: [] }) temoignages: string[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

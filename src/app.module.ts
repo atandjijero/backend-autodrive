@@ -6,6 +6,12 @@ import { VehiculesModule } from './modules/vehicules/vehicules.module';
 import { ReservationModule } from './modules/reservations/reservation.module';
 import { PaiementsModule } from './modules/paiements/paiments.module';
 import { StatsModule } from './modules/clients/stats/stats.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { PromotionsModule } from './modules/promotions/promotions.module';
+import { ContactModule } from './modules/contact/contact.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { BlogModule } from './modules/blog/blog.module';
+import { AgenciesModule } from './modules/agencies/agencies.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -21,6 +27,12 @@ import { StatsModule } from './modules/clients/stats/stats.module';
     ReservationModule,
     PaiementsModule,
     StatsModule,
+    DashboardModule,
+    PromotionsModule,
+    ContactModule,
+    NotificationsModule,
+    BlogModule,
+    AgenciesModule,
   ],
   controllers: [],
   providers: [],

@@ -5,6 +5,7 @@ import { PaiementsService } from 'src/modules/paiements/services/paiements.servi
 import { Paiement, PaiementSchema } from './schemas/paiement.schema';
 import { Reservation, ReservationSchema } from 'src/modules/reservations/schema/reservation.schema';
 import { MailModule } from 'src/shared/mail.module';
+import { PromotionsModule } from 'src/modules/promotions/promotions.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { MailModule } from 'src/shared/mail.module';
       { name: Reservation.name, schema: ReservationSchema }, 
     ]),
     MailModule,
+    PromotionsModule,
   ],
   controllers: [PaiementsController],
   providers: [PaiementsService],

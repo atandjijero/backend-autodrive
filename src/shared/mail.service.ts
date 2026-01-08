@@ -10,7 +10,7 @@ export class MailService implements OnModuleInit {
     this.transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false, 
+      secure: false,
       auth: {
         user: process.env.MAIL_USER,
         pass: process.env.MAIL_PASS,
@@ -35,17 +35,29 @@ export class MailService implements OnModuleInit {
       from: `"AutoDrive Auth" <${process.env.MAIL_USER}>`,
       to,
       subject: 'Votre code OTP - AutoDrive',
-      text: `Votre code de vérification est : ${otp}. Il expire dans 5 minutes.`,
       html: `
-        <div style="font-family: Arial, sans-serif; color: #333;">
-          <h2 style="color:#004080;">Code OTP AutoDrive</h2>
-          <p>Bonjour,</p>
-          <p>Voici votre code de connexion sécurisé :</p>
-          <p style="font-size:22px; font-weight:bold; color:#004080; text-align:center;">${otp}</p>
-          <p>Ce code est valable pendant <b>5 minutes</b>.</p>
-          <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
-          <p style="margin-top:20px;">Merci,<br/>L'équipe AutoDrive</p>
-        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-family:Arial,sans-serif;color:#333;">
+          <tr>
+            <td style="background:#004080;color:#fff;padding:16px;text-align:center;font-size:20px;font-weight:bold;">
+              AutoDrive Auth
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px;">
+              <p style="font-size:16px;">Bonjour,</p>
+              <p style="font-size:15px;">Voici votre code de connexion sécurisé :</p>
+              <p style="font-size:26px;font-weight:bold;color:#004080;text-align:center;margin:20px 0;">${otp}</p>
+              <p style="font-size:14px;color:#555;text-align:center;">Ce code est valable pendant <b>5 minutes</b>.</p>
+              <p style="font-size:13px;color:#777;text-align:center;margin-top:20px;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
+              <p style="margin-top:30px;font-size:14px;">Merci,<br/><strong>L'équipe AutoDrive</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f5f5f5;text-align:center;padding:12px;font-size:12px;color:#888;">
+              © ${new Date().getFullYear()} AutoDrive. Tous droits réservés.
+            </td>
+          </tr>
+        </table>
       `,
     });
   }
@@ -54,83 +66,143 @@ export class MailService implements OnModuleInit {
    * Envoi lien de réinitialisation mot de passe
    */
   async sendResetLink(to: string, token: string) {
-    // Important : correspond au frontend /reset-password/:token
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
     await this.transporter.sendMail({
       from: `"AutoDrive Auth" <${process.env.MAIL_USER}>`,
       to,
       subject: 'Réinitialisation de votre mot de passe - AutoDrive',
-      text: `Cliquez sur ce lien pour réinitialiser votre mot de passe : ${resetUrl}`,
       html: `
-        <div style="font-family: Arial, sans-serif; color: #333;">
-          <h2 style="color:#004080;">Réinitialisation de mot de passe AutoDrive</h2>
-          <p>Bonjour,</p>
-          <p>Vous avez demandé à réinitialiser votre mot de passe.</p>
-          <p>Cliquez sur le lien ci-dessous :</p>
-          <p style="text-align:center; margin:20px 0;">
-            <a href="${resetUrl}" style="background:#004080; color:#fff; padding:10px 20px; text-decoration:none; border-radius:5px;">
-              Réinitialiser mon mot de passe
-            </a>
-          </p>
-          <p>Ce lien est valable pendant <b>1 heure</b>.</p>
-          <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
-          <p style="margin-top:20px;">Merci,<br/>L'équipe AutoDrive</p>
-        </div>
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-family:Arial,sans-serif;color:#333;">
+          <tr>
+            <td style="background:#004080;color:#fff;padding:16px;text-align:center;font-size:20px;font-weight:bold;">
+              AutoDrive Auth
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px;">
+              <p style="font-size:16px;">Bonjour,</p>
+              <p style="font-size:15px;">Vous avez demandé à réinitialiser votre mot de passe.</p>
+              <p style="margin:25px 0;text-align:center;">
+                <table align="center" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td bgcolor="#004080" style="border-radius:4px;">
+                      <a href="${resetUrl}" target="_blank" style="display:inline-block;padding:12px 24px;font-weight:bold;color:#fff;text-decoration:none;">
+                        Réinitialiser mon mot de passe
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </p>
+              <p style="font-size:14px;color:#555;text-align:center;">Ce lien est valable pendant <b>1 heure</b>.</p>
+              <p style="font-size:13px;color:#777;text-align:center;margin-top:20px;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>
+              <p style="margin-top:30px;font-size:14px;">Merci,<br/><strong>L'équipe AutoDrive</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f5f5f5;text-align:center;padding:12px;font-size:12px;color:#888;">
+              © ${new Date().getFullYear()} AutoDrive. Tous droits réservés.
+            </td>
+          </tr>
+        </table>
       `,
     });
   }
+
   /**
- * Envoi confirmation de paiement + localisation Google Maps
- */
-async sendPaymentConfirmation(to: string, name: string, amount: number) {
-  const googleMapsUrl = "https://maps.app.goo.gl/FyWEczQtLVD5CrvSA";
+   * Envoi confirmation de paiement + localisation Google Maps
+   */
+  async sendPaymentConfirmation(to: string, name: string, amount: number) {
+    const googleMapsUrl = "https://maps.app.goo.gl/FyWEczQtLVD5CrvSA";
 
-  await this.transporter.sendMail({
-    from: `"AutoDrive Paiement" <${process.env.MAIL_USER}>`,
-    to,
-    subject: 'Confirmation de paiement - AutoDrive',
-    html: `
-      <div style="font-family: Arial, sans-serif; color: #333;">
-        <h2 style="color:#004080;">Paiement confirmé !</h2>
+    await this.transporter.sendMail({
+      from: `"AutoDrive Paiement" <${process.env.MAIL_USER}>`,
+      to,
+      subject: 'Confirmation de paiement - AutoDrive',
+      html: `
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-family:Arial,sans-serif;color:#333;">
+          <tr>
+            <td style="background:#004080;color:#fff;padding:16px;text-align:center;font-size:20px;font-weight:bold;">
+              AutoDrive Paiement
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px;">
+              <p style="font-size:16px;">Bonjour <strong>${name}</strong>,</p>
+              <p style="font-size:15px;">Nous vous confirmons que votre paiement de <strong>${amount} €</strong> a été effectué avec succès.</p>
+              
+              <h3 style="color:#004080;margin-top:30px;">Votre véhicule vous attend</h3>
+              <p>Vous pouvez maintenant vous rendre à notre agence pour récupérer votre voiture.</p>
+              
+              <h3 style="color:#004080;margin-top:30px;">Adresse de l'agence :</h3>
+              <p>
+                <strong>AutoDrive - Agence principale</strong><br/>
+                Rue de l'Aéroport, Lomé, Togo<br/>
+                Téléphone : +228 90 00 00 00
+              </p>
+              
+              <p style="margin:25px 0;text-align:center;">
+                <table align="center" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td bgcolor="#004080" style="border-radius:4px;">
+                      <a href="${googleMapsUrl}" target="_blank" style="display:inline-block;padding:12px 24px;font-weight:bold;color:#fff;text-decoration:none;">
+                        Voir sur Google Maps
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </p>
+              
+              <p style="font-size:14px;">Merci de vous présenter avec une pièce d'identité valide et votre numéro de réservation.</p>
+              <p style="margin-top:30px;font-size:14px;">Cordialement,<br/><strong>L'équipe AutoDrive</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f5f5f5;text-align:center;padding:12px;font-size:12px;color:#888;">
+              © ${new Date().getFullYear()} AutoDrive. Tous droits réservés.
+            </td>
+          </tr>
+        </table>
+      `,
+    });
+  }
 
-        <p>Bonjour <strong>${name}</strong>,</p>
-
-        <p>
-          Nous vous confirmons que votre paiement de 
-          <strong>${amount} €</strong> a été effectué avec succès.
-        </p>
-
-        <h3 style="color:#004080;"> Votre véhicule vous attend</h3>
-        <p>
-          Vous pouvez maintenant vous rendre à notre agence pour récupérer votre voiture.
-        </p>
-
-        <h3 style="color:#004080;">📍 Adresse de l'agence :</h3>
-        <p>
-          <strong>AutoDrive - Agence principale</strong><br/>
-          Rue de l'Aéroport, Lomé, Togo<br/>
-          Téléphone : +228 90 00 00 00
-        </p>
-
-        <p style="margin: 20px 0;">
-          
-          <a href="${googleMapsUrl}" 
-             target="_blank" 
-             style="background:#004080; color:#fff; padding:10px 20px; text-decoration:none; border-radius:5px;">
-            Voir sur Google Maps
-          </a>
-        </p>
-
-        <p>
-          Merci de vous présenter avec une pièce d'identité valide et votre numéro de réservation.
-        </p>
-
-        <br/>
-        <p>Cordialement,<br/>L'équipe AutoDrive</p>
-      </div>
-    `,
-  });
-}
-
+  /**
+   * Envoi de réponse à un message de contact
+   */
+  async sendContactResponse(to: string, name: string, originalMessage: string, response: string) {
+    await this.transporter.sendMail({
+      from: `"AutoDrive Support" <${process.env.MAIL_USER}>`,
+      to,
+      subject: 'Réponse à votre message - AutoDrive',
+      html: `
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-family:Arial,sans-serif;color:#333;">
+          <tr>
+            <td style="background:#004080;color:#fff;padding:16px;text-align:center;font-size:20px;font-weight:bold;">
+              AutoDrive Support
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px;">
+              <p style="font-size:16px;">Bonjour ${name},</p>
+              <p style="font-size:15px;">Nous avons bien reçu votre message :</p>
+              <blockquote style="border-left:4px solid #004080;padding-left:16px;margin:16px 0;font-style:italic;color:#555;">
+                ${originalMessage}
+              </blockquote>
+              <p style="font-size:15px;">Voici notre réponse :</p>
+              <p style="font-size:15px;background:#f9f9f9;padding:16px;border-radius:4px;">
+                ${response}
+              </p>
+              <p style="margin-top:30px;font-size:14px;">Cordialement,<br/><strong>L'équipe AutoDrive</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f5f5f5;text-align:center;padding:12px;font-size:12px;color:#888;">
+              © ${new Date().getFullYear()} AutoDrive. Tous droits réservés.
+            </td>
+          </tr>
+        </table>
+      `,
+    });
+  }
 }

@@ -6,6 +6,7 @@ import { ReservationService } from 'src/modules/reservations/services/reservatio
 import { ReservationController } from 'src/modules/reservations/controllers/reservation.controller';
 import { PdfModule } from 'src/modules/reservations/pdf.module';
 import { User, UserSchema } from 'src/auth/schemas/user.schema';
+import { PromotionsModule } from 'src/modules/promotions/promotions.module';
 
 
 @Module({
@@ -16,6 +17,7 @@ import { User, UserSchema } from 'src/auth/schemas/user.schema';
        { name: User.name, schema: UserSchema },
     ]),
     PdfModule,
+    PromotionsModule,
   ],
   providers: [ReservationService],
   controllers: [ReservationController],

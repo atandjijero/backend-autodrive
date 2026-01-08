@@ -4,10 +4,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { join } from 'path';
-import * as express from 'express';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // ConfigService pour lire .env
   const configService = app.get(ConfigService);
@@ -29,8 +29,10 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Expose le dossier uploads en statique
-  app.use('/uploads', express.static(join(__dirname, '..', uploadsPath)));
+  // Servir les fichiers statiques depuis le dossier uploads
+  app.useStaticAssets(join(__dirname, '..', uploadsPath), {
+    prefix: '/uploads/',
+  });
 
   // Swagger configuration
   const config = new DocumentBuilder()
@@ -49,7 +51,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,            // supprime les champs non attendus
-      forbidNonWhitelisted: true, // rejette les champs inconnus
+      forbidNonWhitelisted: false, // ignore les champs inconnus au lieu de rejeter
       transform: true,            // transforme les types automatiquement
     }),
   );

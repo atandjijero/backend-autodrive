@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Agence Paris Centre",
+    "address": "123 Rue de la Paix",
+    "city": "Paris",
+    "postalCode": "75001",
+    "country": "France",
+    "phone": "+33123456789",
+    "email": "contact@agence-paris.fr",
+    "manager": "Jean Dupont",
+    "description": "Agence principale de Paris spécialisée dans la location de véhicules de luxe",
+    "isActive": true
+  },
+  {
+    "name": "Agence Lyon Métropole",
+    "address": "45 Boulevard des Belges",
+    "city": "Lyon",
+    "postalCode": "69006",
+    "country": "France",
+    "phone": "+33456789012",
+    "email": "contact@agence-lyon.fr",
+    "manager": "Marie Martin",
+    "description": "Agence de Lyon pour tous vos besoins en location automobile",
+    "isActive": true
+  }
+]

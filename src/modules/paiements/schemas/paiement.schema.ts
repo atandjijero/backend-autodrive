@@ -33,6 +33,12 @@ export class Paiement {
 
   @Prop({ enum: StatutPaiement, default: StatutPaiement.Reussi })
   statut: StatutPaiement;
+
+  @Prop({ type: Types.ObjectId, ref: 'Promotion' })
+  promotionId?: Types.ObjectId; // Promotion appliquée au moment du paiement
+
+  @Prop({ default: 0 })
+  montantRemise: number; // Montant de la remise appliquée
 }
 
 export const PaiementSchema = SchemaFactory.createForClass(Paiement);
