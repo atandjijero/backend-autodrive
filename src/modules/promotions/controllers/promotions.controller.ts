@@ -45,6 +45,14 @@ export class PromotionsController {
     return this.promotionsService.findAll();
   }
 
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Get('admin')
+  @ApiOperation({ summary: 'Lister toutes les promotions (Admin)' })
+  @ApiResponse({ status: 200, description: 'Liste complète des promotions retournée' })
+  async findAllAdmin() {
+    return this.promotionsService.findAllAdmin();
+  }
+
   @Get('active')
   @ApiOperation({ summary: 'Lister les promotions actives' })
   @ApiResponse({ status: 200, description: 'Liste des promotions actives retournée' })

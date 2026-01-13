@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PromotionsController } from 'src/modules/promotions/controllers/promotions.controller';
 import { PromotionsService } from 'src/modules/promotions/services/promotions.service';
+import { PromotionsSchedulerService } from 'src/modules/promotions/services/promotions-scheduler.service';
 import { Promotion, PromotionSchema } from './schemas/promotion.schema';
 
 @Module({
@@ -11,7 +12,7 @@ import { Promotion, PromotionSchema } from './schemas/promotion.schema';
     ]),
   ],
   controllers: [PromotionsController],
-  providers: [PromotionsService],
+  providers: [PromotionsService, PromotionsSchedulerService],
   exports: [PromotionsService],
 })
 export class PromotionsModule {}

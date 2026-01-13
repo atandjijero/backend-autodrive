@@ -33,31 +33,6 @@ export class AgenciesPublicController {
     return this.agenciesService.findAll({ page: pageN, limit: limitN, q, isActive: isActiveBool });
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Obtenir une agence par ID' })
-  @ApiParam({ name: 'id', description: 'ID de l\'agence' })
-  @ApiResponse({ status: 200, description: 'Agence trouvée', type: AgencyResponseDto })
-  @ApiResponse({ status: 404, description: 'Agence non trouvée' })
-  async getById(@Param('id') id: string) {
-    return this.agenciesService.findById(id);
-  }
-
-  @Get('active/all')
-  @ApiOperation({ summary: 'Lister toutes les agences actives' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Numéro de page (défaut: 1)' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Nombre d\'éléments par page (défaut: 10)' })
-  @ApiQuery({ name: 'q', required: false, type: String, description: 'Recherche textuelle' })
-  @ApiResponse({ status: 200, description: 'Liste des agences actives', type: AgenciesListResponseDto })
-  async getActiveAgencies(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('q') q?: string,
-  ) {
-    const pageN = page ? parseInt(page, 10) : 1;
-    const limitN = limit ? parseInt(limit, 10) : 10;
-    return this.agenciesService.findAll({ page: pageN, limit: limitN, q, isActive: true });
-  }
-
   @Get('nearby')
   @ApiOperation({ summary: 'Rechercher les agences proches d\'une position GPS' })
   @ApiQuery({ name: 'longitude', required: true, type: Number, description: 'Longitude du point de recherche' })
@@ -94,6 +69,31 @@ export class AgenciesPublicController {
     }
 
     return this.agenciesService.findNearbyAgencies(lng, lat, maxDist, lim);
+  }
+
+  @Get('active/all')
+  @ApiOperation({ summary: 'Lister toutes les agences actives' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Numéro de page (défaut: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Nombre d\'éléments par page (défaut: 10)' })
+  @ApiQuery({ name: 'q', required: false, type: String, description: 'Recherche textuelle' })
+  @ApiResponse({ status: 200, description: 'Liste des agences actives', type: AgenciesListResponseDto })
+  async getActiveAgencies(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('q') q?: string,
+  ) {
+    const pageN = page ? parseInt(page, 10) : 1;
+    const limitN = limit ? parseInt(limit, 10) : 10;
+    return this.agenciesService.findAll({ page: pageN, limit: limitN, q, isActive: true });
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Obtenir une agence par ID' })
+  @ApiParam({ name: 'id', description: 'ID de l\'agence' })
+  @ApiResponse({ status: 200, description: 'Agence trouvée', type: AgencyResponseDto })
+  @ApiResponse({ status: 404, description: 'Agence non trouvée' })
+  async getById(@Param('id') id: string) {
+    return this.agenciesService.findById(id);
   }
 
   @Get(':id/export-pdf')

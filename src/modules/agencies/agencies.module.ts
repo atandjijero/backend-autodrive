@@ -9,5 +9,6 @@ import { Agency, AgencySchema } from './schemas/agency.schema';
   imports: [MongooseModule.forFeature([{ name: Agency.name, schema: AgencySchema }])],
   providers: [AgenciesService],
   controllers: [AgenciesController, AgenciesPublicController],
+  exports: [AgenciesService],
 })
 export class AgenciesModule {}

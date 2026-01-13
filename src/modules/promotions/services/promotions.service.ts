@@ -65,6 +65,13 @@ export class PromotionsService {
 
   async findAll(): Promise<PromotionDocument[]> {
     return this.promotionModel
+      .find({ deleted: false, statut: 'active' })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
+  async findAllAdmin(): Promise<PromotionDocument[]> {
+    return this.promotionModel
       .find({ deleted: false })
       .sort({ createdAt: -1 })
       .exec();

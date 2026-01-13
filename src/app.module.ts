@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { VehiculesModule } from './modules/vehicules/vehicules.module';
 import { ReservationModule } from './modules/reservations/reservation.module';
@@ -12,9 +13,11 @@ import { ContactModule } from './modules/contact/contact.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { BlogModule } from './modules/blog/blog.module';
 import { AgenciesModule } from './modules/agencies/agencies.module';
+import { ContractsModule } from './modules/contracts/contracts.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -33,6 +36,7 @@ import { AgenciesModule } from './modules/agencies/agencies.module';
     NotificationsModule,
     BlogModule,
     AgenciesModule,
+    ContractsModule,
   ],
   controllers: [],
   providers: [],

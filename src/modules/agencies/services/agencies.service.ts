@@ -63,6 +63,11 @@ export class AgenciesService {
   }
 
   async findById(id: string): Promise<Agency> {
+    // Validate ObjectId format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      throw new NotFoundException('Agency not found');
+    }
+
     const agency = await this.agencyModel.findById(id).exec();
     if (!agency) throw new NotFoundException('Agency not found');
 
@@ -122,31 +127,37 @@ export class AgenciesService {
 
   async findNearbyAgencies(longitude: number, latitude: number, maxDistance: number = 10000, limit: number = 10): Promise<Agency[]> {
     try {
-      const agencies = await this.agencyModel.find({
-        location: {
-          $exists: true,
-          $ne: null,
-          $near: {
-            $geometry: {
+      const agencies = await this.agencyModel.aggregate([
+        {
+          $geoNear: {
+            near: {
               type: 'Point',
               coordinates: [longitude, latitude]
             },
-            $maxDistance: maxDistance // Distance en mètres
+            distanceField: 'distance',
+            maxDistance: maxDistance,
+            spherical: true
           }
         },
-        isActive: true
-      }).limit(limit).exec();
+        {
+          $match: {
+            isActive: true
+          }
+        },
+        {
+          $limit: limit
+        }
+      ]).exec();
 
       // Convertir les coordonnées GeoJSON en format latitude/longitude
       return agencies.map(agency => {
-        const agencyObj = agency.toObject();
-        if (agencyObj.location && agencyObj.location.coordinates) {
-          (agencyObj as any).location = {
-            latitude: agencyObj.location.coordinates[1],
-            longitude: agencyObj.location.coordinates[0]
+        if (agency.location && agency.location.coordinates) {
+          agency.location = {
+            latitude: agency.location.coordinates[1],
+            longitude: agency.location.coordinates[0]
           };
         }
-        return agencyObj as Agency;
+        return agency as Agency;
       });
     } catch (error) {
       console.error('Error finding nearby agencies:', error);
