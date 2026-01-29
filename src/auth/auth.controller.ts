@@ -49,6 +49,12 @@ export class AuthController {
     return this.auth.resetPassword(dto);
   }
 
+  @Post('verify-email')
+  @ApiResponse({ status: 200, description: 'Email vérifié avec succès' })
+  verifyEmail(@Body('token') token: string) {
+    return this.auth.verifyEmail(token);
+  }
+
   // Récupération du profil utilisateur connecté
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth() //  Swagger : ajoute le bouton "Authorize"

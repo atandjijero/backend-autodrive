@@ -113,15 +113,21 @@ export class DashboardService {
 }
 
   async getAllTemoignages() {
-    const users = await this.userModel.find({ deleted: false, 'temoignages.0': { $exists: true } }).exec();
+    // ✅ MIEUX - retourne TOUS les utilisateurs avec des témoignages
+    const users = await this.userModel.find({ deleted: false }).exec();
     const allTemoignages: { nom: string; prenom: string; message: string }[] = [];
+    
     for (const user of users) {
-      for (const message of user.temoignages ?? []) {
-        allTemoignages.push({
-          nom: user.nom,
-          prenom: user.prenom,
-          message,
-        });
+      if (user.temoignages && Array.isArray(user.temoignages)) {
+        for (const message of user.temoignages) {
+          if (message && message.trim()) {  // Vérifie que le message n'est pas vide
+            allTemoignages.push({
+              nom: user.nom,
+              prenom: user.prenom,
+              message,
+            });
+          }
+        }
       }
     }
     return allTemoignages;

@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 
 export type VehicleDocument = HydratedDocument<Vehicle>;
 
@@ -26,6 +26,9 @@ export class Vehicle {
   @Prop({ required: true, unique: true })
   immatriculation: string; // Immatriculation unique
 
+  @Prop({ type: Types.ObjectId, ref: 'Agency' })
+  agenceId: Types.ObjectId; // Agence à laquelle appartient le véhicule
+
   // Soft delete
   @Prop({ default: false })
   deleted: boolean; // Indique si le véhicule est supprimé
@@ -41,4 +44,5 @@ export const VehicleSchema = SchemaFactory.createForClass(Vehicle);
 // Index pour optimiser les recherches fréquentes
 VehicleSchema.index({ marque: 1 });
 VehicleSchema.index({ modele: 1 });
+VehicleSchema.index({ agenceId: 1 });
 VehicleSchema.index({ deleted: 1 });

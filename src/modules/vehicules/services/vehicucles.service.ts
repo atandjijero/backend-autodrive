@@ -11,18 +11,28 @@ import {
 } from 'src/modules/vehicules/schemas/vehicule.schema';
 import { CreateVehicleDto } from 'src/modules/vehicules/dto/create-vehicule.dto';
 import { UpdateVehicleDto } from 'src/modules/vehicules/dto/update-vehicule.dto';
+import { AgenciesService } from '../../agencies/services/agencies.service';
 
 @Injectable()
 export class VehiclesService {
   constructor(
     @InjectModel(Vehicle.name)
     private readonly vehicleModel: Model<VehicleDocument>,
+    private readonly agenciesService: AgenciesService,
   ) {}
 
   async create(dto: CreateVehicleDto): Promise<Vehicle> {
     try {
+      // Récupérer l'agence active
+      const agencies = await this.agenciesService.findAll({ isActive: true, limit: 1 });
+      if (!agencies.data || agencies.data.length === 0) {
+        throw new InternalServerErrorException('Aucune agence active trouvée');
+      }
+      const activeAgency = agencies.data[0];
+
       const vehicle = new this.vehicleModel({
         ...dto,
+        agenceId: (activeAgency as any)._id,
         deleted: false,
         disponible: true,
         photos: dto.photos ?? [],

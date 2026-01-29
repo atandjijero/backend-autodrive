@@ -58,7 +58,12 @@ export class User {
   @Prop()
   resetPasswordExpires?: Date;
 
-  //  Soft delete
+  //  Email verification
+  @Prop()
+  verificationToken?: string;
+
+  @Prop()
+  verificationTokenExpires?: Date;
   @Prop({ default: false })
   deleted: boolean;
 

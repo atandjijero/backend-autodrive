@@ -21,5 +21,6 @@ import { PromotionsModule } from 'src/modules/promotions/promotions.module';
   ],
   providers: [ReservationService],
   controllers: [ReservationController],
+  exports: [ReservationService],
 })
 export class ReservationModule {}

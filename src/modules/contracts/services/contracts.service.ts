@@ -8,6 +8,7 @@ import { ValidateContractDto } from '../dto/validate-contract.dto';
 import { MailService } from '../../../shared/mail.service';
 import { AgenciesService } from '../../agencies/services/agencies.service';
 import { VehicleDocument } from '../../vehicules/schemas/vehicule.schema';
+import { ReservationService } from '../../reservations/services/reservation.service';
 
 @Injectable()
 export class ContractsService {
@@ -18,6 +19,7 @@ export class ContractsService {
     private vehicleModel: Model<VehicleDocument>,
     private readonly mailService: MailService,
     private readonly agenciesService: AgenciesService,
+    private readonly reservationService: ReservationService,
   ) {}
 
   async create(createContractDto: CreateContractDto, user: any): Promise<ContractDocument> {
@@ -138,13 +140,81 @@ export class ContractsService {
     // Appliquer les changements fournis
     Object.assign(contract, updateContractDto);
 
-    // Si on approuve le contrat, mettre à jour la date de validation et l'admin valideur
-    if (updateContractDto.statut === ContractStatus.Approved && contract.statut !== ContractStatus.Approved) {
-      contract.dateValidation = new Date();
-      contract.validePar = user.userId;
+    // Si l'admin change le statut, enregistrer infos de validation
+    const statutChange = updateContractDto.statut && updateContractDto.statut !== contract.statut;
+    if (statutChange) {
+      if (updateContractDto.statut === ContractStatus.Approved || updateContractDto.statut === ContractStatus.Rejected) {
+        contract.dateValidation = new Date();
+        contract.validePar = user.userId;
+      }
+      // Si approuvé, récupérer et assigner les infos agence pour le PDF
+      if (updateContractDto.statut === ContractStatus.Approved && this.agenciesService) {
+        try {
+          const res = await this.agenciesService.findAll({ isActive: true, limit: 1 });
+          const agency = res && res.data && res.data.length ? res.data[0] : null;
+          if (agency) {
+            contract.agenceNom = agency.name || 'AutoDrive';
+            contract.agenceAdresse = agency.address ? `${agency.address}${agency.city ? ', ' + agency.city : ''}${agency.postalCode ? ' - ' + agency.postalCode : ''}` : 'Adresse non spécifiée';
+            contract.agenceTelephone = agency.phone || 'Téléphone non spécifié';
+            contract.agenceEmail = agency.email || process.env.MAIL_USER || 'Email non spécifié';
+            contract.agenceLogo = agency.logo || undefined;
+          } else {
+            contract.agenceNom = 'AutoDrive';
+            contract.agenceAdresse = 'Adresse non spécifiée';
+            contract.agenceTelephone = 'Téléphone non spécifié';
+            contract.agenceEmail = 'Email non spécifié';
+            contract.agenceLogo = undefined;
+          }
+        } catch (e) {
+          contract.agenceNom = 'AutoDrive';
+          contract.agenceAdresse = 'Adresse non spécifiée';
+          contract.agenceTelephone = 'Téléphone non spécifié';
+          contract.agenceEmail = 'Email non spécifié';
+          contract.agenceLogo = undefined;
+        }
+      }
     }
 
-    return await contract.save();
+    const saved = await contract.save();
+
+    // Si le statut a changé, envoyer le mail de notification (ne doit pas bloquer la réponse)
+    if (statutChange) {
+      try {
+        const populated = await this.contractModel.findById(saved._id).populate('userId', 'nom prenom email').exec();
+        const userObj: any = populated?.userId || null;
+
+        // Récupérer l'agence active si possible
+        let agency: any = null;
+        let mapsUrl: string | undefined = undefined;
+        if (this.agenciesService) {
+          try {
+            const res = await this.agenciesService.findAll({ isActive: true, limit: 1 });
+            agency = res && res.data && res.data.length ? res.data[0] : null;
+            if (agency && agency.location && agency.location.latitude && agency.location.longitude) {
+              mapsUrl = `https://www.google.com/maps/search/?api=1&query=${agency.location.latitude},${agency.location.longitude}`;
+            }
+          } catch (e) {
+            // ignore agency lookup errors
+          }
+        }
+
+        if (this.mailService && userObj && userObj.email) {
+          await this.mailService.sendContractValidation(
+            userObj.email,
+            `${userObj.nom || ''} ${userObj.prenom || ''}`.trim(),
+            saved.statut === ContractStatus.Approved,
+            saved._id.toString(),
+            agency || (saved as any).agenceNom ? { name: (saved as any).agenceNom, address: (saved as any).agenceAdresse, phone: (saved as any).agenceTelephone, email: (saved as any).agenceEmail } : null,
+            mapsUrl,
+            updateContractDto.commentaires,
+          );
+        }
+      } catch (err) {
+        console.error('Erreur lors de l\'envoi de l\'email après mise à jour du contrat :', err);
+      }
+    }
+
+    return saved;
   }
 
   async delete(id: string, user: any): Promise<void> {
@@ -191,6 +261,33 @@ export class ContractsService {
       contract.commentaires = validateContractDto.commentaires;
     }
 
+    // Récupérer l'agence active pour les informations du PDF (si approuvé)
+    let agency: any = null;
+    let mapsUrl: string | undefined = undefined;
+    if (contract.statut === ContractStatus.Approved && this.agenciesService) {
+      try {
+        const res = await this.agenciesService.findAll({ isActive: true, limit: 1 });
+        agency = res && res.data && res.data.length ? res.data[0] : null;
+        if (agency) {
+          contract.agenceNom = agency.name || 'AutoDrive';
+          contract.agenceAdresse = agency.address ? `${agency.address}${agency.city ? ', ' + agency.city : ''}${agency.postalCode ? ' - ' + agency.postalCode : ''}` : 'Adresse non spécifiée';
+          contract.agenceTelephone = agency.phone || 'Téléphone non spécifié';
+          contract.agenceEmail = agency.email || process.env.MAIL_USER || 'Email non spécifié';
+          contract.agenceLogo = agency.logo || undefined;
+          if (agency.location && agency.location.latitude && agency.location.longitude) {
+            mapsUrl = `https://www.google.com/maps/search/?api=1&query=${agency.location.latitude},${agency.location.longitude}`;
+          }
+        }
+      } catch (e) {
+        // ignore agency lookup errors, use defaults
+        contract.agenceNom = 'AutoDrive';
+        contract.agenceAdresse = 'Adresse non spécifiée';
+        contract.agenceTelephone = 'Téléphone non spécifié';
+        contract.agenceEmail = 'Email non spécifié';
+        contract.agenceLogo = undefined;
+      }
+    }
+
     const saved = await contract.save();
 
     // Envoyer un email à l'utilisateur pour l'informer de la décision
@@ -198,21 +295,6 @@ export class ContractsService {
       // récupérer les informations utilisateur pour l'email
       const populated = await this.contractModel.findById(saved._id).populate('userId', 'nom prenom email').exec();
       const userObj: any = populated?.userId || null;
-
-      // Récupérer l'agence active si possible
-      let agency: any = null;
-      let mapsUrl: string | undefined = undefined;
-      if (this.agenciesService) {
-        try {
-          const res = await this.agenciesService.findAll({ isActive: true, limit: 1 });
-          agency = res && res.data && res.data.length ? res.data[0] : null;
-          if (agency && agency.location && agency.location.latitude && agency.location.longitude) {
-            mapsUrl = `https://www.google.com/maps/search/?api=1&query=${agency.location.latitude},${agency.location.longitude}`;
-          }
-        } catch (e) {
-          // ignore agency lookup errors
-        }
-      }
 
       if (this.mailService && userObj && userObj.email) {
         await this.mailService.sendContractValidation(
@@ -229,6 +311,23 @@ export class ContractsService {
     } catch (err) {
       // Ne pas bloquer l'opération si l'email échoue
       console.error('Erreur lors de l\'envoi de l\'email de validation de contrat:', err);
+    }
+
+    // Si le contrat est approuvé et a un véhicule, créer automatiquement une réservation
+    if (contract.statut === ContractStatus.Approved && contract.vehicleId) {
+      try {
+        await this.reservationService.create({
+          vehicleId: contract.vehicleId.toString(),
+          clientId: contract.userId.toString(),
+          dateDebut: contract.dateDebut.toISOString().split('T')[0], // Format YYYY-MM-DD
+          dateFin: contract.dateFin.toISOString().split('T')[0],
+          codePromo: undefined,
+        });
+        console.log(`Réservation créée automatiquement pour le contrat ${saved._id}`);
+      } catch (err) {
+        console.error('Erreur lors de la création automatique de la réservation:', err);
+        // Ne pas bloquer l'approbation du contrat si la réservation échoue
+      }
     }
 
     return saved;

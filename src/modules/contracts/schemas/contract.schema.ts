@@ -56,7 +56,10 @@ export class Contract {
   agenceTelephone?: string;
 
   @Prop()
-  agenceEmail?: string;
+  agenceEmail?: string;reserv
+
+  @Prop()
+  agenceLogo?: string;
 
   // Soft delete
   @Prop({ default: false })

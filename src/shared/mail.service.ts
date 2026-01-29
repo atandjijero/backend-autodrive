@@ -113,6 +113,54 @@ export class MailService implements OnModuleInit {
   }
 
   /**
+   * Envoi email de vérification
+   */
+  async sendVerificationEmail(to: string, token: string) {
+    const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}?redirect=/auth/login`;
+
+    await this.transporter.sendMail({
+      from: `"AutoDrive Auth" <${process.env.MAIL_USER}>`,
+      to,
+      subject: 'Vérifiez votre email - AutoDrive',
+      html: `
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-family:Arial,sans-serif;color:#333;">
+          <tr>
+            <td style="background:#004080;color:#fff;padding:16px;text-align:center;font-size:20px;font-weight:bold;">
+              AutoDrive Auth
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px;">
+              <p style="font-size:16px;">Bienvenue sur AutoDrive !</p>
+              <p style="font-size:15px;">Pour finaliser votre inscription, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous.</p>
+              <p style="margin:25px 0;text-align:center;">
+                <table align="center" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td bgcolor="#004080" style="border-radius:4px;">
+                      <a href="${verificationUrl}" target="_blank" style="display:inline-block;padding:12px 24px;font-weight:bold;color:#fff;text-decoration:none;">
+                        Vérifier mon email
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </p>
+              <p style="font-size:14px;color:#555;text-align:center;">Ce lien est valable pendant <b>24 heures</b>.</p>
+              <p style="font-size:13px;color:#777;text-align:center;margin-top:20px;">Après vérification, vous serez automatiquement redirigé vers la page de connexion.</p>
+              <p style="font-size:13px;color:#777;text-align:center;margin-top:20px;">Si vous n'avez pas créé de compte, ignorez cet email.</p>
+              <p style="margin-top:30px;font-size:14px;">Merci,<br/><strong>L'équipe AutoDrive</strong></p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f5f5f5;text-align:center;padding:12px;font-size:12px;color:#888;">
+              © ${new Date().getFullYear()} AutoDrive. Tous droits réservés.
+            </td>
+          </tr>
+        </table>
+      `,
+    });
+  }
+
+  /**
    * Envoi confirmation de paiement + localisation Google Maps
    */
   async sendPaymentConfirmation(to: string, name: string, amount: number) {

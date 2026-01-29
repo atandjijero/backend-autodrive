@@ -34,10 +34,18 @@ export class AuthService {
     if (exists) throw new BadRequestException('Email déjà utilisé');
 
     const hash = await bcrypt.hash(dto.motPasse, 10);
-    const user = await this.users.create({ ...dto, motPasse: hash });
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const user = await this.users.create({
+      ...dto,
+      motPasse: hash,
+      verificationToken,
+      verificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 heures
+    });
 
-    const { motPasse, ...safeUser } = user.toObject();
-    return { message: 'Utilisateur créé avec succès', user: safeUser };
+    await this.mailService.sendVerificationEmail(user.email, verificationToken);
+
+    const { motPasse, verificationToken: _, verificationTokenExpires, ...safeUser } = user.toObject();
+    return { message: 'Utilisateur créé avec succès. Vérifiez votre email pour activer votre compte.', user: safeUser };
   }
 
   //  Connexion avec OTP si première fois
@@ -112,6 +120,25 @@ export class AuthService {
     await user.save();
 
     return { message: 'Mot de passe réinitialisé avec succès' };
+  }
+
+  //  Vérification email
+  async verifyEmail(token: string) {
+    const user = await this.users.findOne({
+      verificationToken: token,
+      verificationTokenExpires: { $gt: new Date() },
+    });
+    if (!user) throw new BadRequestException('Token de vérification invalide ou expiré');
+
+    user.isVerified = true;
+    user.verificationToken = undefined;
+    user.verificationTokenExpires = undefined;
+    await user.save();
+
+    return {
+      message: 'Email vérifié avec succès. Vous pouvez maintenant vous connecter.',
+      redirectTo: '/auth/login' // URL de redirection vers la page de connexion
+    };
   }
 
   //  Génération JWT
