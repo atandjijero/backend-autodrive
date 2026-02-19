@@ -9,7 +9,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model,Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { User, UserDocument } from 'src/auth/schemas/user.schema';
+import { User, UserDocument, Role } from 'src/auth/schemas/user.schema';
 import { MailService } from 'src/shared/mail.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LoginDto } from './dto/login.dto';
@@ -34,18 +34,29 @@ export class AuthService {
     if (exists) throw new BadRequestException('Email déjà utilisé');
 
     const hash = await bcrypt.hash(dto.motPasse, 10);
-    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const isAdmin = dto.role === Role.Admin;
+
+    const verificationToken = isAdmin ? undefined : crypto.randomBytes(32).toString('hex');
+
     const user = await this.users.create({
       ...dto,
       motPasse: hash,
+      isVerified: isAdmin ? true : false,
       verificationToken,
-      verificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 heures
+      verificationTokenExpires: isAdmin ? undefined : new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 heures
     });
 
-    await this.mailService.sendVerificationEmail(user.email, verificationToken);
+    if (!isAdmin) {
+      await this.mailService.sendVerificationEmail(user.email, verificationToken as string);
+    }
 
     const { motPasse, verificationToken: _, verificationTokenExpires, ...safeUser } = user.toObject();
-    return { message: 'Utilisateur créé avec succès. Vérifiez votre email pour activer votre compte.', user: safeUser };
+    return {
+      message: isAdmin
+        ? 'Utilisateur créé avec succès. Le compte admin est activé sans vérification email.'
+        : 'Utilisateur créé avec succès. Vérifiez votre email pour activer votre compte.',
+      user: safeUser,
+    };
   }
 
   //  Connexion avec OTP si première fois
