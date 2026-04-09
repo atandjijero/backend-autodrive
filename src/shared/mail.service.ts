@@ -1,53 +1,67 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import * as sgMail from '@sendgrid/mail';
 import fs from 'fs';
 import path from 'path';
 import { AgenciesService } from '../modules/agencies/services/agencies.service';
 
 @Injectable()
 export class MailService implements OnModuleInit {
-  private transporter: nodemailer.Transporter;
+  private transporter?: nodemailer.Transporter;
+  private useSendGrid: boolean = false;
   private readonly logger = new Logger(MailService.name);
 
   constructor(private readonly agenciesService?: AgenciesService) {
-    const mailHost = process.env.MAIL_HOST || 'smtp.gmail.com';
-    const mailPort = Number(process.env.MAIL_PORT || '465');
-    const mailSecure = process.env.MAIL_SECURE
-      ? process.env.MAIL_SECURE === 'true'
-      : mailPort === 465;
+    const sendGridApiKey = process.env.SENDGRID_API_KEY;
 
-    this.transporter = nodemailer.createTransport({
-      host: mailHost,
-      port: mailPort,
-      secure: mailSecure,
-      auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
-    });
+    if (sendGridApiKey) {
+      // Utiliser SendGrid si la clé API est fournie
+      sgMail.setApiKey(sendGridApiKey);
+      this.useSendGrid = true;
+      this.logger.log('✅ SendGrid configuré pour l\'envoi d\'emails');
+    } else {
+      // Fallback vers SMTP (Gmail ou autre)
+      const mailHost = process.env.MAIL_HOST || 'smtp.gmail.com';
+      const mailPort = Number(process.env.MAIL_PORT || '465');
+      const mailSecure = process.env.MAIL_SECURE
+        ? process.env.MAIL_SECURE === 'true'
+        : mailPort === 465;
 
-    this.logger.log(`SMTP config: ${mailHost}:${mailPort} secure=${mailSecure}`);
+      this.transporter = nodemailer.createTransport({
+        host: mailHost,
+        port: mailPort,
+        secure: mailSecure,
+        auth: {
+          user: process.env.MAIL_USER,
+          pass: process.env.MAIL_PASS,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+      });
+
+      this.logger.log(`📧 SMTP configuré: ${mailHost}:${mailPort} secure=${mailSecure}`);
+    }
   }
 
   async onModuleInit() {
-    try {
-      await this.transporter.verify();
-      this.logger.log('✅ Service SMTP prêt pour envoyer des mails');
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : typeof error === 'string'
-          ? error
-          : JSON.stringify(error);
+    if (!this.useSendGrid) {
+      try {
+        await this.transporter!.verify();
+        this.logger.log('✅ Service SMTP prêt pour envoyer des mails');
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+            ? error
+            : JSON.stringify(error);
 
-      this.logger.error(`❌ Problème de connexion au service SMTP : ${errorMessage}`);
+        this.logger.error(`❌ Problème de connexion au service SMTP : ${errorMessage}`);
+      }
     }
   }
 
@@ -55,8 +69,8 @@ export class MailService implements OnModuleInit {
    * Envoi OTP (première connexion)
    */
   async sendOtp(to: string, otp: string) {
-    await this.transporter.sendMail({
-      from: `"AutoDrive Auth" <${process.env.MAIL_USER}>`,
+    const mailOptions = {
+      from: `"AutoDrive Auth" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: 'Votre code OTP - AutoDrive',
       html: `
@@ -83,7 +97,13 @@ export class MailService implements OnModuleInit {
           </tr>
         </table>
       `,
-    });
+    };
+
+    if (this.useSendGrid) {
+      await sgMail.send(mailOptions);
+    } else {
+      await this.transporter!.sendMail(mailOptions);
+    }
   }
 
   /**
@@ -92,8 +112,8 @@ export class MailService implements OnModuleInit {
   async sendResetLink(to: string, token: string) {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
-    await this.transporter.sendMail({
-      from: `"AutoDrive Auth" <${process.env.MAIL_USER}>`,
+    const mailOptions = {
+      from: `"AutoDrive Auth" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: 'Réinitialisation de votre mot de passe - AutoDrive',
       html: `
@@ -130,7 +150,13 @@ export class MailService implements OnModuleInit {
           </tr>
         </table>
       `,
-    });
+    };
+
+    if (this.useSendGrid) {
+      await sgMail.send(mailOptions);
+    } else {
+      await this.transporter!.sendMail(mailOptions);
+    }
   }
 
   /**
@@ -139,8 +165,8 @@ export class MailService implements OnModuleInit {
   async sendVerificationEmail(to: string, token: string) {
     const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}?redirect=/auth/login`;
 
-    await this.transporter.sendMail({
-      from: `"AutoDrive Auth" <${process.env.MAIL_USER}>`,
+    const mailOptions = {
+      from: `"AutoDrive Auth" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: 'Vérifiez votre email - AutoDrive',
       html: `
@@ -178,7 +204,13 @@ export class MailService implements OnModuleInit {
           </tr>
         </table>
       `,
-    });
+    };
+
+    if (this.useSendGrid) {
+      await sgMail.send(mailOptions);
+    } else {
+      await this.transporter!.sendMail(mailOptions);
+    }
   }
 
   /**
@@ -205,8 +237,8 @@ export class MailService implements OnModuleInit {
     const agencyAddress = agency?.address ? `${agency.address}${agency.city ? ', ' + agency.city : ''}${agency.postalCode ? ' - ' + agency.postalCode : ''}` : 'Rue de l\'Aéroport, Lomé, Togo';
     const agencyPhone = agency?.phone || '+228 90 00 00 00';
 
-    await this.transporter.sendMail({
-      from: `"AutoDrive Paiement" <${process.env.MAIL_USER}>`,
+    const mailOptions = {
+      from: `"AutoDrive Paiement" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: 'Confirmation de paiement - AutoDrive',
       html: `
@@ -255,7 +287,13 @@ export class MailService implements OnModuleInit {
           </tr>
         </table>
       `,
-    });
+    };
+
+    if (this.useSendGrid) {
+      await sgMail.send(mailOptions);
+    } else {
+      await this.transporter!.sendMail(mailOptions);
+    }
   }
 
   /**
@@ -317,8 +355,8 @@ export class MailService implements OnModuleInit {
       logoHtml = '';
     }
 
-    await this.transporter.sendMail({
-      from: `"AutoDrive" <${process.env.MAIL_USER}>`,
+    const mailOptions = {
+      from: `"AutoDrive" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: `${title} - AutoDrive`,
       attachments: attachments.length ? attachments : undefined,
@@ -376,15 +414,21 @@ export class MailService implements OnModuleInit {
           </tr>
         </table>
       `,
-    });
+    };
+
+    if (this.useSendGrid) {
+      await sgMail.send(mailOptions);
+    } else {
+      await this.transporter!.sendMail(mailOptions);
+    }
   }
 
   /**
    * Envoi de réponse à un message de contact
    */
   async sendContactResponse(to: string, name: string, originalMessage: string, response: string) {
-    await this.transporter.sendMail({
-      from: `"AutoDrive Support" <${process.env.MAIL_USER}>`,
+    const mailOptions = {
+      from: `"AutoDrive Support" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: 'Réponse à votre message - AutoDrive',
       html: `
@@ -415,6 +459,12 @@ export class MailService implements OnModuleInit {
           </tr>
         </table>
       `,
-    });
+    };
+
+    if (this.useSendGrid) {
+      await sgMail.send(mailOptions);
+    } else {
+      await this.transporter!.sendMail(mailOptions);
+    }
   }
 }
