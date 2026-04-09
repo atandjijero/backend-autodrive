@@ -15,6 +15,7 @@ export interface JwtPayload {
 
 /**
  * Utilisateur authentifié injecté dans req.user
+ * Compatible avec Passport
  */
 export interface AuthenticatedUser {
   sub: string;          // identifiant utilisateur (aligné avec JwtPayload)
@@ -24,17 +25,4 @@ export interface AuthenticatedUser {
   role: Role;
   isVerified: boolean;
   telephone: string;
-}
-
-/**
- * Extension de Express.Request pour inclure l'utilisateur
- * On fusionne avec Express.Request au lieu de redéfinir
- */
-declare global {
-  namespace Express {
-    // On étend Request pour ajouter notre type AuthenticatedUser
-    interface Request {
-      user?: AuthenticatedUser;
-    }
-  }
 }

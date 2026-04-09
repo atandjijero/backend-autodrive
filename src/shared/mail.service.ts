@@ -1,67 +1,54 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
-import * as sgMail from '@sendgrid/mail';
 import fs from 'fs';
 import path from 'path';
 import { AgenciesService } from '../modules/agencies/services/agencies.service';
 
 @Injectable()
 export class MailService implements OnModuleInit {
-  private transporter?: nodemailer.Transporter;
-  private useSendGrid: boolean = false;
+  private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(MailService.name);
 
   constructor(private readonly agenciesService?: AgenciesService) {
-    const sendGridApiKey = process.env.SENDGRID_API_KEY;
+    // Configuration Brevo SMTP
+    const mailHost = process.env.MAIL_HOST || 'smtp-relay.brevo.com';
+    const mailPort = Number(process.env.MAIL_PORT || '587');
+    const mailSecure = process.env.MAIL_SECURE
+      ? process.env.MAIL_SECURE === 'true'
+      : false;
 
-    if (sendGridApiKey) {
-      // Utiliser SendGrid si la clé API est fournie
-      sgMail.setApiKey(sendGridApiKey);
-      this.useSendGrid = true;
-      this.logger.log('✅ SendGrid configuré pour l\'envoi d\'emails');
-    } else {
-      // Fallback vers SMTP (Brevo, Gmail ou autre)
-      const mailHost = process.env.MAIL_HOST || 'smtp-relay.brevo.com';
-      const mailPort = Number(process.env.MAIL_PORT || '587');
-      const mailSecure = process.env.MAIL_SECURE
-        ? process.env.MAIL_SECURE === 'true'
-        : false; // Brevo utilise généralement false pour le port 587
+    this.transporter = nodemailer.createTransport({
+      host: mailHost,
+      port: mailPort,
+      secure: mailSecure,
+      auth: {
+        user: process.env.MAIL_USER,
+        pass: process.env.MAIL_PASS,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
+    });
 
-      this.transporter = nodemailer.createTransport({
-        host: mailHost,
-        port: mailPort,
-        secure: mailSecure,
-        auth: {
-          user: process.env.MAIL_USER,
-          pass: process.env.MAIL_PASS,
-        },
-        tls: {
-          rejectUnauthorized: false,
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
-      });
-
-      this.logger.log(`📧 SMTP configuré: ${mailHost}:${mailPort} secure=${mailSecure}`);
-    }
+    this.logger.log(`📧 SMTP Brevo configuré: ${mailHost}:${mailPort} (secure=${mailSecure})`);
   }
 
   async onModuleInit() {
-    if (!this.useSendGrid) {
-      try {
-        await this.transporter!.verify();
-        this.logger.log('✅ Service SMTP prêt pour envoyer des mails');
-      } catch (error: unknown) {
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : typeof error === 'string'
-            ? error
-            : JSON.stringify(error);
+    try {
+      await this.transporter.verify();
+      this.logger.log('✅ Service SMTP Brevo prêt pour envoyer des mails');
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+          ? error
+          : JSON.stringify(error);
 
-        this.logger.error(`❌ Problème de connexion au service SMTP : ${errorMessage}`);
-      }
+      this.logger.error(`❌ Problème de connexion au service SMTP Brevo : ${errorMessage}`);
     }
   }
 
@@ -70,7 +57,7 @@ export class MailService implements OnModuleInit {
    */
   async sendOtp(to: string, otp: string) {
     const mailOptions = {
-      from: `"AutoDrive Auth" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
+      from: `"AutoDrive Auth" <${process.env.MAIL_FROM || process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: 'Votre code OTP - AutoDrive',
       html: `
@@ -99,10 +86,13 @@ export class MailService implements OnModuleInit {
       `,
     };
 
-    if (this.useSendGrid) {
-      await sgMail.send(mailOptions);
-    } else {
-      await this.transporter!.sendMail(mailOptions);
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`✅ OTP envoyé à ${to}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+      this.logger.error(`❌ Erreur envoi OTP à ${to}: ${errorMessage}`);
+      throw error;
     }
   }
 
@@ -113,7 +103,7 @@ export class MailService implements OnModuleInit {
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${token}`;
 
     const mailOptions = {
-      from: `"AutoDrive Auth" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
+      from: `"AutoDrive Auth" <${process.env.MAIL_FROM || process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: 'Réinitialisation de votre mot de passe - AutoDrive',
       html: `
@@ -152,10 +142,13 @@ export class MailService implements OnModuleInit {
       `,
     };
 
-    if (this.useSendGrid) {
-      await sgMail.send(mailOptions);
-    } else {
-      await this.transporter!.sendMail(mailOptions);
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Email de réinitialisation envoyé à ${to}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+      this.logger.error(`❌ Erreur envoi email réinitialisation à ${to}: ${errorMessage}`);
+      throw error; // Re-throw to let caller handle
     }
   }
 
@@ -166,7 +159,7 @@ export class MailService implements OnModuleInit {
     const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${token}?redirect=/auth/login`;
 
     const mailOptions = {
-      from: `"AutoDrive Auth" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
+      from: `"AutoDrive Auth" <${process.env.MAIL_FROM || process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: 'Vérifiez votre email - AutoDrive',
       html: `
@@ -206,10 +199,13 @@ export class MailService implements OnModuleInit {
       `,
     };
 
-    if (this.useSendGrid) {
-      await sgMail.send(mailOptions);
-    } else {
-      await this.transporter!.sendMail(mailOptions);
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Email de vérification envoyé à ${to}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+      this.logger.error(`❌ Erreur envoi email vérification à ${to}: ${errorMessage}`);
+      throw error;
     }
   }
 
@@ -238,7 +234,7 @@ export class MailService implements OnModuleInit {
     const agencyPhone = agency?.phone || '+228 90 00 00 00';
 
     const mailOptions = {
-      from: `"AutoDrive Paiement" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
+      from: `"AutoDrive Paiement" <${process.env.MAIL_FROM || process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: 'Confirmation de paiement - AutoDrive',
       html: `
@@ -289,10 +285,13 @@ export class MailService implements OnModuleInit {
       `,
     };
 
-    if (this.useSendGrid) {
-      await sgMail.send(mailOptions);
-    } else {
-      await this.transporter!.sendMail(mailOptions);
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Confirmation de paiement envoyée à ${to}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+      this.logger.error(`❌ Erreur envoi confirmation paiement à ${to}: ${errorMessage}`);
+      throw error;
     }
   }
 
@@ -356,9 +355,9 @@ export class MailService implements OnModuleInit {
     }
 
     const mailOptions = {
-      from: `"AutoDrive" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
+      from: `"AutoDrive" <${process.env.MAIL_FROM || process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
-      subject: `${title} - AutoDrive`,
+      subject: `${title} - AutoDrive`, 
       attachments: attachments.length ? attachments : undefined,
       html: `
         <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-family:Arial,sans-serif;color:#333;">
@@ -416,10 +415,13 @@ export class MailService implements OnModuleInit {
       `,
     };
 
-    if (this.useSendGrid) {
-      await sgMail.send(mailOptions);
-    } else {
-      await this.transporter!.sendMail(mailOptions);
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Notification contrat ${approved ? 'approuvé' : 'rejeté'} envoyée à ${to}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+      this.logger.error(`❌ Erreur envoi notification contrat à ${to}: ${errorMessage}`);
+      throw error;
     }
   }
 
@@ -428,7 +430,7 @@ export class MailService implements OnModuleInit {
    */
   async sendContactResponse(to: string, name: string, originalMessage: string, response: string) {
     const mailOptions = {
-      from: `"AutoDrive Support" <${process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
+      from: `"AutoDrive Support" <${process.env.MAIL_FROM || process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject: 'Réponse à votre message - AutoDrive',
       html: `
@@ -461,10 +463,13 @@ export class MailService implements OnModuleInit {
       `,
     };
 
-    if (this.useSendGrid) {
-      await sgMail.send(mailOptions);
-    } else {
-      await this.transporter!.sendMail(mailOptions);
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`✅ Réponse contact envoyée à ${to}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+      this.logger.error(`❌ Erreur envoi réponse contact à ${to}: ${errorMessage}`);
+      throw error;
     }
   }
 }

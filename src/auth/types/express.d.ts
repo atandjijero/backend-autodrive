@@ -2,11 +2,7 @@ import { AuthenticatedUser } from 'src/auth/types/auth.types';
 
 declare global {
   namespace Express {
-    // On étend l'interface existante au lieu de la redéfinir
+    // Étend le type User de Passport
     interface User extends AuthenticatedUser {}
-
-    interface Request {
-      user?: User;
-    }
   }
 }
