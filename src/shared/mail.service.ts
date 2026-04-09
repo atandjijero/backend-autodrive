@@ -1,55 +1,153 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import { AgenciesService } from '../modules/agencies/services/agencies.service';
 
 @Injectable()
 export class MailService implements OnModuleInit {
-  private transporter: nodemailer.Transporter;
+  private transporter: nodemailer.Transporter | null = null;
+  private readonly useBrevoApi: boolean;
+  private readonly brevoApiKey?: string;
   private readonly logger = new Logger(MailService.name);
 
   constructor(private readonly agenciesService?: AgenciesService) {
-    // Configuration Brevo SMTP
-    const mailHost = process.env.MAIL_HOST || 'smtp-relay.brevo.com';
-    const mailPort = Number(process.env.MAIL_PORT || '587');
-    const mailSecure = process.env.MAIL_SECURE
-      ? process.env.MAIL_SECURE === 'true'
-      : false;
+    this.brevoApiKey = process.env.BREVO_API_KEY || process.env.MAIL_API_KEY;
+    this.useBrevoApi = !!this.brevoApiKey;
 
-    this.transporter = nodemailer.createTransport({
-      host: mailHost,
-      port: mailPort,
-      secure: mailSecure,
-      auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
-    });
+    if (!this.useBrevoApi) {
+      const mailHost = process.env.MAIL_HOST || 'smtp-relay.brevo.com';
+      const mailPort = Number(process.env.MAIL_PORT || '587');
+      const mailSecure = process.env.MAIL_SECURE
+        ? process.env.MAIL_SECURE === 'true'
+        : false;
 
-    this.logger.log(`📧 SMTP Brevo configuré: ${mailHost}:${mailPort} (secure=${mailSecure})`);
+      this.transporter = nodemailer.createTransport({
+        host: mailHost,
+        port: mailPort,
+        secure: mailSecure,
+        auth: {
+          user: process.env.MAIL_USER,
+          pass: process.env.MAIL_PASS,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
+      });
+
+      this.logger.log(`📧 SMTP Brevo configuré: ${mailHost}:${mailPort} (secure=${mailSecure})`);
+    } else {
+      this.logger.log('📧 Brevo API activée pour envoyer des mails');
+    }
   }
 
   async onModuleInit() {
-    try {
-      await this.transporter.verify();
-      this.logger.log('✅ Service SMTP Brevo prêt pour envoyer des mails');
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : typeof error === 'string'
-          ? error
-          : JSON.stringify(error);
-
-      this.logger.error(`❌ Problème de connexion au service SMTP Brevo : ${errorMessage}`);
+    if (this.useBrevoApi) {
+      try {
+        await axios.get('https://api.brevo.com/v3/account', {
+          headers: {
+            'api-key': this.brevoApiKey,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+        });
+        this.logger.log('✅ Service Brevo API prêt pour envoyer des mails');
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+            ? error
+            : JSON.stringify(error);
+        this.logger.error(`❌ Problème de connexion à l’API Brevo : ${errorMessage}`);
+      }
+    } else if (this.transporter) {
+      try {
+        await this.transporter.verify();
+        this.logger.log('✅ Service SMTP Brevo prêt pour envoyer des mails');
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+            ? error
+            : JSON.stringify(error);
+        this.logger.error(`❌ Problème de connexion au service SMTP Brevo : ${errorMessage}`);
+      }
     }
+  }
+
+  private parseSender(from: string) {
+    const match = from.match(/^(?:"?([^\"]*)"?\s)?<(.+)>$/);
+    if (match) {
+      return { name: match[1] || process.env.MAIL_FROM_NAME || 'AutoDrive', email: match[2] };
+    }
+    return { name: process.env.MAIL_FROM_NAME || 'AutoDrive', email: from };
+  }
+
+  private async buildApiAttachments(attachments: any[] | undefined) {
+    if (!attachments?.length) {
+      return undefined;
+    }
+
+    return attachments
+      .map((attachment) => {
+        if (attachment.content) {
+          return {
+            name: attachment.filename || attachment.name || 'attachment',
+            content: Buffer.from(attachment.content, 'utf8').toString('base64'),
+          };
+        }
+
+        if (attachment.path) {
+          const fileContent = fs.readFileSync(attachment.path);
+          return {
+            name: attachment.filename || path.basename(attachment.path),
+            content: fileContent.toString('base64'),
+          };
+        }
+
+        return undefined;
+      })
+      .filter(Boolean);
+  }
+
+  private async sendMail(mailOptions: nodemailer.SendMailOptions) {
+    const from = (mailOptions.from as string) || process.env.MAIL_FROM || process.env.MAIL_USER || 'noreply@autodrive.com';
+
+    if (this.useBrevoApi) {
+      const { name, email } = this.parseSender(from);
+      const payload: any = {
+        sender: { email, name },
+        to: [{ email: mailOptions.to as string }],
+        subject: mailOptions.subject,
+        htmlContent: mailOptions.html,
+      };
+
+      const attachments = await this.buildApiAttachments(mailOptions.attachments as any[] | undefined);
+      if (attachments) {
+        payload.attachment = attachments;
+      }
+
+      await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+        headers: {
+          'api-key': this.brevoApiKey,
+          'Content-Type': 'application/json',
+        },
+        timeout: 30000,
+      });
+      return;
+    }
+
+    if (!this.transporter) {
+      throw new Error('Transporteur email non initialisé');
+    }
+
+    await this.transporter.sendMail(mailOptions);
   }
 
   /**
@@ -87,7 +185,7 @@ export class MailService implements OnModuleInit {
     };
 
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.sendMail(mailOptions);
       this.logger.log(`✅ OTP envoyé à ${to}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
@@ -143,7 +241,7 @@ export class MailService implements OnModuleInit {
     };
 
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.sendMail(mailOptions);
       this.logger.log(`✅ Email de réinitialisation envoyé à ${to}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
@@ -200,7 +298,7 @@ export class MailService implements OnModuleInit {
     };
 
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.sendMail(mailOptions);
       this.logger.log(`✅ Email de vérification envoyé à ${to}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
@@ -286,7 +384,7 @@ export class MailService implements OnModuleInit {
     };
 
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.sendMail(mailOptions);
       this.logger.log(`✅ Confirmation de paiement envoyée à ${to}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
@@ -416,7 +514,7 @@ export class MailService implements OnModuleInit {
     };
 
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.sendMail(mailOptions);
       this.logger.log(`✅ Notification contrat ${approved ? 'approuvé' : 'rejeté'} envoyée à ${to}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
@@ -464,7 +562,7 @@ export class MailService implements OnModuleInit {
     };
 
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.sendMail(mailOptions);
       this.logger.log(`✅ Réponse contact envoyée à ${to}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
