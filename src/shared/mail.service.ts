@@ -20,12 +20,12 @@ export class MailService implements OnModuleInit {
       this.useSendGrid = true;
       this.logger.log('✅ SendGrid configuré pour l\'envoi d\'emails');
     } else {
-      // Fallback vers SMTP (Gmail ou autre)
-      const mailHost = process.env.MAIL_HOST || 'smtp.gmail.com';
-      const mailPort = Number(process.env.MAIL_PORT || '465');
+      // Fallback vers SMTP (Brevo, Gmail ou autre)
+      const mailHost = process.env.MAIL_HOST || 'smtp-relay.brevo.com';
+      const mailPort = Number(process.env.MAIL_PORT || '587');
       const mailSecure = process.env.MAIL_SECURE
         ? process.env.MAIL_SECURE === 'true'
-        : mailPort === 465;
+        : false; // Brevo utilise généralement false pour le port 587
 
       this.transporter = nodemailer.createTransport({
         host: mailHost,
