@@ -1,48 +1,90 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Post, PostDocument } from '../schemas/post.schema';
+import { PrismaService } from '../../../prisma.service';
+import { PostStatus } from '@prisma/client';
 import { CreatePostDto } from '../dto/create-post.dto';
 import { UpdatePostDto } from '../dto/update-post.dto';
 
 @Injectable()
 export class BlogService {
-  constructor(@InjectModel(Post.name) private postModel: Model<PostDocument>) {}
+  constructor(private prisma: PrismaService) {}
 
   async create(dto: CreatePostDto) {
     console.log('Creating post with DTO:', dto);
-    const created = new this.postModel(dto as any);
-    const saved = await created.save();
-    console.log('Saved post:', saved);
-    return saved;
+    const post = await this.prisma.post.create({
+      data: {
+        title: dto.title,
+        content: dto.body,
+        slug: dto.slug,
+        excerpt: dto.excerpt,
+        author: dto.author,
+        status: dto.status as PostStatus || PostStatus.draft,
+        tags: dto.tags || [],
+        publishedAt: dto.publishedAt,
+        featuredImage: dto.featuredImage,
+      },
+    });
+    console.log('Saved post:', post);
+    return post;
   }
 
   async update(id: string, dto: UpdatePostDto) {
-    const updated = await this.postModel.findByIdAndUpdate(id, dto, { new: true }).exec();
-    if (!updated) throw new NotFoundException('Post not found');
-    return updated;
+    try {
+      const post = await this.prisma.post.update({
+        where: { id: parseInt(id) },
+        data: {
+          title: dto.title,
+          content: dto.body,
+          slug: dto.slug,
+          excerpt: dto.excerpt,
+          author: dto.author,
+          status: dto.status as PostStatus,
+          tags: dto.tags,
+          publishedAt: dto.publishedAt,
+          featuredImage: dto.featuredImage,
+        },
+      });
+      return post;
+    } catch (error) {
+      throw new NotFoundException('Post not found');
+    }
   }
 
   async delete(id: string) {
-    const res = await this.postModel.findByIdAndDelete(id).exec();
-    if (!res) throw new NotFoundException('Post not found');
-    return { success: true };
+    try {
+      await this.prisma.post.delete({
+        where: { id: parseInt(id) },
+      });
+      return { success: true };
+    } catch (error) {
+      throw new NotFoundException('Post not found');
+    }
   }
 
   async findBySlug(slug: string) {
-    return this.postModel.findOne({ slug }).exec();
+    return this.prisma.post.findUnique({
+      where: { slug },
+    });
   }
 
   async findById(id: string) {
-    return this.postModel.findById(id).exec();
+    return this.prisma.post.findUnique({
+      where: { id: parseInt(id) },
+    });
   }
 
   async publish(id: string, publish = true) {
-    const update: any = { status: publish ? 'published' : 'draft' };
-    if (publish) update.publishedAt = new Date();
-    const post = await this.postModel.findByIdAndUpdate(id, update, { new: true }).exec();
-    if (!post) throw new NotFoundException('Post not found');
-    return post;
+    try {
+      const post = await this.prisma.post.update({
+        where: { id: parseInt(id) },
+        data: {
+          status: publish ? PostStatus.published : PostStatus.draft,
+          publishedAt: publish ? new Date() : null,
+        },
+      });
+      return post;
+    } catch (error) {
+      throw new NotFoundException('Post not found');
+    }
   }
 
   async list(opts: { page?: number; limit?: number; q?: string; tags?: string[]; status?: string; admin?: boolean }) {
@@ -50,21 +92,35 @@ export class BlogService {
     const limit = Math.max(1, Math.min(100, opts.limit || 10));
     const skip = (page - 1) * limit;
 
-    const filter: any = {};
-    if (opts.status) filter.status = opts.status;
-    if (!opts.admin && !filter.status) filter.status = 'published';
-    if (opts.tags && opts.tags.length) filter.tags = { $all: opts.tags };
-
-    let query = this.postModel.find(filter);
+    const where: any = {};
+    if (opts.status) where.status = opts.status;
+    if (!opts.admin && !where.status) where.status = PostStatus.published;
+    if (opts.tags && opts.tags.length) {
+      where.tags = {
+        hasSome: opts.tags,
+      };
+    }
 
     if (opts.q) {
-      // Try text search then fallback to regex
-      query = this.postModel.find({ $and: [filter, { $text: { $search: opts.q } }] });
+      // For PostgreSQL, we can use ILIKE for case-insensitive search
+      where.OR = [
+        { title: { contains: opts.q, mode: 'insensitive' } },
+        { content: { contains: opts.q, mode: 'insensitive' } },
+        { excerpt: { contains: opts.q, mode: 'insensitive' } },
+      ];
     }
 
     const [data, total] = await Promise.all([
-      query.sort({ publishedAt: -1, createdAt: -1 }).skip(skip).limit(limit).exec(),
-      this.postModel.countDocuments(filter).exec(),
+      this.prisma.post.findMany({
+        where,
+        orderBy: [
+          { publishedAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
+        skip,
+        take: limit,
+      }),
+      this.prisma.post.count({ where }),
     ]);
 
     return { data, total, page, limit };

@@ -1,10 +1,10 @@
-import { Role } from 'src/auth/schemas/user.schema';
+import { Role } from '@prisma/client';
 
 /**
  * Payload JWT (contenu du token signé)
  */
 export interface JwtPayload {
-  sub: string;          // identifiant utilisateur (Mongo ObjectId)
+  sub: string;          // identifiant utilisateur (Prisma ID as string)
   email: string;
   nom: string;
   prenom: string;

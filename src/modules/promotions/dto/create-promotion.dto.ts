@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEnum, IsNumber, IsDateString, IsOptional, IsMongoId, Min, IsArray } from 'class-validator';
-import { TypePromotion, StatutPromotion } from '../schemas/promotion.schema';
+import { Type } from 'class-transformer';
+import { IsString, IsEnum, IsNumber, IsDateString, IsOptional, Min, IsArray } from 'class-validator';
+import { TypePromotion } from '@prisma/client';
 
 export class CreatePromotionDto {
   @ApiProperty({
@@ -8,22 +9,22 @@ export class CreatePromotionDto {
     example: 'Réduction Hiver 2026',
   })
   @IsString()
-  titre: string;
+  titre!: string;
 
   @ApiProperty({
     description: 'Description détaillée de la promotion',
     example: 'Profitez de 20% de réduction sur toutes les locations cet hiver',
   })
   @IsString()
-  description: string;
+  description!: string;
 
   @ApiProperty({
     description: 'Type de promotion',
     enum: TypePromotion,
-    example: TypePromotion.Pourcentage,
+    example: TypePromotion.pourcentage,
   })
   @IsEnum(TypePromotion)
-  type: TypePromotion;
+  type!: TypePromotion;
 
   @ApiProperty({
     description: 'Valeur de la réduction (pourcentage ou montant fixe)',
@@ -31,30 +32,33 @@ export class CreatePromotionDto {
   })
   @IsNumber()
   @Min(0)
-  valeur: number;
+  valeur!: number;
 
   @ApiProperty({
     description: 'Date de début de validité',
     example: '2026-01-01',
   })
   @IsDateString()
-  dateDebut: string;
+  dateDebut!: string;
 
   @ApiProperty({
     description: 'Date de fin de validité',
     example: '2026-03-31',
   })
   @IsDateString()
-  dateFin: string;
+  dateFin!: string;
 
   @ApiProperty({
-    description: 'ID du véhicule spécifique (optionnel pour promo globale)',
-    example: '656f8c123abc456def789012',
+    description: 'IDs des véhicules spécifiques (optionnel pour promo globale)',
+    example: [123],
     required: false,
+    type: [Number],
   })
   @IsOptional()
-  @IsMongoId()
-  vehiculeId?: string;
+  @IsArray()
+  @Type(() => Number)
+  @IsNumber({}, { each: true })
+  vehiculesIds?: number[];
 
   @ApiProperty({
     description: 'Nombre maximum d\'utilisations (0 = illimité)',

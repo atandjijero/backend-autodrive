@@ -8,16 +8,15 @@ import {
   Body,
   Query,
   UseGuards,
+  ParseIntPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PromotionsService } from 'src/modules/promotions/services/promotions.service';
-import { CreatePromotionDto } from 'src/modules/promotions//dto/create-promotion.dto';
-import { UpdatePromotionDto } from 'src/modules/promotions//dto/update-promotion.dto';
+import { CreatePromotionDto } from 'src/modules/promotions/dto/create-promotion.dto';
+import { UpdatePromotionDto } from 'src/modules/promotions/dto/update-promotion.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { AdminGuard } from 'src/auth/guards/admin.guard';
- import { isValidObjectId } from 'mongoose';
-import { BadRequestException } from '@nestjs/common';
-
 
 @ApiTags('promotions')
 @ApiBearerAuth()
@@ -60,14 +59,6 @@ export class PromotionsController {
     return this.promotionsService.findActive();
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Obtenir une promotion par ID' })
-  @ApiResponse({ status: 200, description: 'Promotion trouvée' })
-  @ApiResponse({ status: 404, description: 'Promotion introuvable' })
-  findById(@Param('id') id: string) {
-    return this.promotionsService.findById(id);
-  }
-
   @Get('code/:code')
   @ApiOperation({ summary: 'Rechercher une promotion par code promo' })
   @ApiResponse({ status: 200, description: 'Promotion trouvée' })
@@ -76,12 +67,20 @@ export class PromotionsController {
     return this.promotionsService.findByCode(code);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Obtenir une promotion par ID' })
+  @ApiResponse({ status: 200, description: 'Promotion trouvée' })
+  @ApiResponse({ status: 404, description: 'Promotion introuvable' })
+  findById(@Param('id', ParseIntPipe) id: number) {
+    return this.promotionsService.findById(id);
+  }
+
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Put(':id')
   @ApiOperation({ summary: 'Mettre à jour une promotion' })
   @ApiResponse({ status: 200, description: 'Promotion mise à jour' })
   @ApiResponse({ status: 404, description: 'Promotion introuvable' })
-  update(@Param('id') id: string, @Body() updatePromotionDto: UpdatePromotionDto) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() updatePromotionDto: UpdatePromotionDto) {
     return this.promotionsService.update(id, updatePromotionDto);
   }
 
@@ -90,25 +89,29 @@ export class PromotionsController {
   @ApiOperation({ summary: 'Supprimer une promotion (soft delete)' })
   @ApiResponse({ status: 200, description: 'Promotion supprimée' })
   @ApiResponse({ status: 404, description: 'Promotion introuvable' })
-  delete(@Param('id') id: string) {
+  delete(@Param('id', ParseIntPipe) id: number) {
     return this.promotionsService.delete(id);
   }
 
+  @Post(':id/appliquer')
+  @ApiOperation({ summary: 'Appliquer une promotion à un montant' })
+  @ApiResponse({ status: 200, description: 'Montant de réduction calculé' })
+  appliquerPromotion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { montantBase: number; vehiculeId?: number | string }
+  ) {
+    let vehiculeId: number | undefined;
+    if (body.vehiculeId !== undefined && body.vehiculeId !== null) {
+      vehiculeId = Number(body.vehiculeId);
+      if (Number.isNaN(vehiculeId)) {
+        throw new BadRequestException('ID de véhicule invalide');
+      }
+    }
 
-@Post(':id/appliquer')
-appliquerPromotion(
-  @Param('id') id: string,
-  @Body() body: { montantBase: number; vehiculeId?: string }
-) {
-  if (!isValidObjectId(id)) {
-    throw new BadRequestException('ID de promotion invalide');
+    return this.promotionsService.appliquerPromotion(
+      id,
+      body.montantBase,
+      vehiculeId,
+    );
   }
-
-  return this.promotionsService.appliquerPromotion(
-    id,
-    body.montantBase,
-    body.vehiculeId
-  );
-}
-
 }

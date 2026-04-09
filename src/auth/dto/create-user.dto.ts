@@ -1,6 +1,6 @@
 import { IsEmail, IsString, MinLength, IsOptional, IsEnum, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Role } from '../schemas/user.schema';
+import { Role } from '@prisma/client';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'Jean', description: 'Nom de famille' })
@@ -38,7 +38,12 @@ export class CreateUserDto {
   @IsString()
   adresse?: string;
 
-  @ApiProperty({ enum: Role, example: Role.Client, description: 'Rôle utilisateur (par défaut Client)' })
+  @ApiProperty({ example: 'https://res.cloudinary.com/moncompte/image/upload/v123/profile.jpg', description: 'URL de la photo de profil', required: false })
+  @IsOptional()
+  @IsString()
+  photo?: string;
+
+  @ApiProperty({ enum: Role, example: Role.client, description: 'Rôle utilisateur (par défaut Client)' })
   @IsOptional()
   @IsEnum(Role, { message: 'Rôle invalide' })
   role?: Role;

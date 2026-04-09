@@ -7,7 +7,7 @@ import {
   UsePipes, 
   ValidationPipe,
   UseGuards,
-  
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse,ApiBearerAuth} from '@nestjs/swagger';
 import { PaiementsService } from '../services/paiements.service';
@@ -42,7 +42,7 @@ export class PaiementsController {
   @ApiOperation({ summary: 'Obtenir un paiement par ID' })
   @ApiResponse({ status: 200, description: 'Paiement trouvé' })
   @ApiResponse({ status: 404, description: 'Paiement introuvable' })
-  findById(@Param('id') id: string) {
+  findById(@Param('id', ParseIntPipe) id: number) {
     return this.paiementsService.findById(id);
   }
 }

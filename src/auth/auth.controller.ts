@@ -1,7 +1,9 @@
-import { Body, Controller, Post, Get, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBody, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Body, Controller, Post, Get, Patch, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { ApiTags, ApiBody, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -15,10 +17,28 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('register')
-  @ApiBody({ type: CreateUserDto })
+  @UseInterceptors(FileInterceptor('photo'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        nom: { type: 'string' },
+        prenom: { type: 'string' },
+        email: { type: 'string' },
+        motPasse: { type: 'string' },
+        telephone: { type: 'string' },
+        telephoneSecondaire: { type: 'string' },
+        adresse: { type: 'string' },
+        role: { type: 'string' },
+        photo: { type: 'string', format: 'binary' },
+      },
+    },
+  })
   @ApiResponse({ status: 201, description: 'Utilisateur créé avec succès' })
-  register(@Body() dto: CreateUserDto) {
-    return this.auth.register(dto);
+  async register(@Body() dto: CreateUserDto, @UploadedFile() photo?: Express.Multer.File) {
+    const photoUrl = photo ? await this.auth.uploadProfilePhoto(photo) : undefined;
+    return this.auth.register(dto, photoUrl);
   }
 
   @Post('login')
@@ -62,5 +82,37 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Profil de l’utilisateur connecté' })
   async getProfile(@CurrentUser() user: any) {
     return this.auth.getProfile(user.userId);
+  }
+
+  @Patch('profil')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(FileInterceptor('photo'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        nom: { type: 'string' },
+        prenom: { type: 'string' },
+        email: { type: 'string' },
+        telephone: { type: 'string' },
+        telephoneSecondaire: { type: 'string' },
+        adresse: { type: 'string' },
+        photo: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Profil mis à jour avec succès' })
+  async updateProfile(
+    @CurrentUser() user: any,
+    @Body() dto: UpdateUserDto,
+    @UploadedFile() photo?: Express.Multer.File,
+  ) {
+    let photoUrl: string | undefined;
+    if (photo) {
+      photoUrl = await this.auth.uploadProfilePhoto(photo);
+    }
+    return this.auth.updateProfile(user.userId, dto, photoUrl);
   }
 }

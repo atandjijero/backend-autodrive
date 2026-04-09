@@ -15,15 +15,24 @@ async function bootstrap() {
   const uploadsPath = configService.get<string>('UPLOADS_PATH') || './uploads';
 
   // Configuration CORS (fronts autorisés)
+  const frontendUrl = configService.get<string>('FRONTEND_URL');
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ];
+
+  if (frontendUrl) {
+    allowedOrigins.push(frontendUrl);
+    // Optionnel: ajouter aussi la version sans slash final si présente
+    if (frontendUrl.endsWith('/')) {
+      allowedOrigins.push(frontendUrl.slice(0, -1));
+    }
+  }
+
   app.enableCors({
-    origin: [
-      'http://localhost:3000',   // React/Vue/Angular en dev
-      'http://127.0.0.1:3000',   // Variante locale
-      'http://10.0.2.2:3000',    // Android Emulator
-      'http://localhost',        // Flutter web
-      'http://127.0.0.1',        // Variante Flutter web
-      'http://localhost:5173',   // Vite (React/Vue/Svelte)
-    ],
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true,

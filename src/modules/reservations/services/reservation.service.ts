@@ -4,51 +4,45 @@ import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { PrismaService } from '../../../prisma.service';
 import {
   Reservation,
-  ReservationDocument,
   StatutReservation,
-} from 'src/modules/reservations/schema/reservation.schema';
-import { Vehicle, VehicleDocument } from 'src/modules/vehicules/schemas/vehicule.schema';
+} from '@prisma/client';
 import { CreateReservationDto } from 'src/modules/reservations/dto/create-reservation.dto';
 import { PromotionsService } from 'src/modules/promotions/services/promotions.service';
 
 @Injectable()
 export class ReservationService {
   constructor(
-    @InjectModel(Reservation.name)
-    private reservationModel: Model<ReservationDocument>,
-    @InjectModel(Vehicle.name)
-    private vehicleModel: Model<VehicleDocument>,
+    private prisma: PrismaService,
     private promotionsService: PromotionsService,
-  ) {}
+  ) { }
 
-  //  Génère un numéro unique de réservation
   private generateReservationNumber(): string {
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     return `RES-${date}-${random}`;
   }
 
-  // Vérifie si la réservation est expirée et met à jour automatiquement
-  private async checkAndUpdateStatus(reservation: ReservationDocument) {
+  private async checkAndUpdateStatus(reservation: Reservation) {
     const now = new Date();
 
     if (
-      reservation.statut === StatutReservation.EnCours &&
+      reservation.statut === StatutReservation.en_cours &&
       reservation.dateFin < now
     ) {
-      reservation.statut = StatutReservation.Terminee;
-      await reservation.save();
+      const updated = await this.prisma.reservation.update({
+        where: { id: reservation.id },
+        data: { statut: StatutReservation.terminee },
+      });
 
       // Libérer le véhicule
-      const vehicle = await this.vehicleModel.findById(reservation.vehicleId);
-      if (vehicle) {
-        vehicle.disponible = true;
-        await vehicle.save();
-      }
+      await this.prisma.vehicle.update({
+        where: { id: reservation.vehicleId },
+        data: { disponible: true },
+      });
+      return updated;
     }
 
     return reservation;
@@ -56,17 +50,19 @@ export class ReservationService {
 
   async create(data: CreateReservationDto): Promise<Reservation> {
     try {
-      const vehicle = await this.vehicleModel.findById(data.vehicleId).exec();
+      const vehicle = await this.prisma.vehicle.findUnique({ where: { id: data.vehicleId } });
       if (!vehicle || vehicle.deleted || !vehicle.disponible) {
         throw new BadRequestException('Véhicule non disponible');
       }
 
-      const overlap = await this.reservationModel.findOne({
-        vehicleId: new Types.ObjectId(data.vehicleId),
-        statut: StatutReservation.EnCours,
-        $or: [
-          { dateDebut: { $lte: data.dateFin }, dateFin: { $gte: data.dateDebut } },
-        ],
+      const overlap = await this.prisma.reservation.findFirst({
+        where: {
+          vehicleId: vehicle.id,
+          statut: { in: [StatutReservation.en_attente, StatutReservation.validee, StatutReservation.en_cours] },
+          OR: [
+            { dateDebut: { lte: new Date(data.dateFin) }, dateFin: { gte: new Date(data.dateDebut) } },
+          ],
+        },
       });
 
       if (overlap) {
@@ -75,36 +71,37 @@ export class ReservationService {
         );
       }
 
-      // Génération du numéro de réservation
       const numeroReservation = this.generateReservationNumber();
 
-      // Gestion de la promotion si code promo fourni
-      let promotionId: Types.ObjectId | undefined;
+      let promotionId: number | undefined;
       if (data.codePromo) {
         const promotion = await this.promotionsService.findByCode(data.codePromo);
         if (!promotion) {
           throw new BadRequestException('Code promo invalide ou expiré');
         }
-        promotionId = promotion._id;
+        promotionId = promotion.id;
       }
 
-      const reservation = new this.reservationModel({
-        vehicleId: new Types.ObjectId(data.vehicleId),
-        clientId: new Types.ObjectId(data.clientId),
-        dateDebut: data.dateDebut,
-        dateFin: data.dateFin,
-        statut: StatutReservation.EnCours,
-        numeroReservation,
-        promotionId,
+      const reservation = await this.prisma.reservation.create({
+        data: {
+          vehicleId: vehicle.id,
+          clientId: data.clientId,
+          dateDebut: new Date(data.dateDebut),
+          dateFin: new Date(data.dateFin),
+          statut: StatutReservation.en_attente,
+          numeroReservation,
+          promotionId,
+        },
       });
 
-      const savedReservation = await reservation.save();
+      await this.prisma.vehicle.update({
+        where: { id: vehicle.id },
+        data: { disponible: false },
+      });
 
-      vehicle.disponible = false;
-      await vehicle.save();
-
-      return savedReservation;
+      return reservation;
     } catch (error) {
+      if (error instanceof BadRequestException) throw error;
       throw new InternalServerErrorException(
         `Erreur lors de la création de la réservation: ${error.message}`,
       );
@@ -112,29 +109,32 @@ export class ReservationService {
   }
 
   async findAll(): Promise<Reservation[]> {
-  try {
-    const reservations = await this.reservationModel
-      .find()
-      .populate('vehicleId')
-      .populate('clientId')
-      .exec();
+    try {
+      const reservations = await this.prisma.reservation.findMany({
+        include: {
+          vehicle: true,
+          client: true,
+          promotion: true,
+        },
+      });
 
-    return Promise.all(reservations.map(r => this.checkAndUpdateStatus(r)));
-  } catch (error) {
-    console.error(" ERREUR FINDALL :", error); 
-    throw new InternalServerErrorException(
-      `Erreur lors de la récupération des réservations: ${error.message}`,
-    );
+      return Promise.all(reservations.map(r => this.checkAndUpdateStatus(r)));
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Erreur lors de la récupération des réservations: ${error.message}`,
+      );
+    }
   }
-}
 
-
-  async findById(id: string): Promise<Reservation> {
-    const reservation = await this.reservationModel
-      .findById(id)
-      .populate('vehicleId')
-      .populate('clientId')
-      .exec();
+  async findById(id: number): Promise<Reservation> {
+    const reservation = await this.prisma.reservation.findUnique({
+      where: { id },
+      include: {
+        vehicle: true,
+        client: true,
+        promotion: true,
+      },
+    });
 
     if (!reservation) {
       throw new NotFoundException('Réservation non trouvée');
@@ -143,37 +143,34 @@ export class ReservationService {
     return this.checkAndUpdateStatus(reservation);
   }
 
-  async updateStatut(id: string, statut: StatutReservation): Promise<Reservation> {
-    const reservation = await this.reservationModel
-      .findByIdAndUpdate(id, { statut }, { new: true })
-      .exec();
-
-    if (!reservation) throw new NotFoundException('Réservation non trouvée');
+  async updateStatut(id: number, statut: StatutReservation): Promise<Reservation> {
+    const reservation = await this.prisma.reservation.update({
+      where: { id },
+      data: { statut },
+    });
 
     if (
-      statut === StatutReservation.Terminee ||
-      statut === StatutReservation.Annulee
+      statut === StatutReservation.terminee ||
+      statut === StatutReservation.annulee
     ) {
-      const vehicle = await this.vehicleModel.findById(reservation.vehicleId).exec();
-      if (vehicle) {
-        vehicle.disponible = true;
-        await vehicle.save();
-      }
+      await this.prisma.vehicle.update({
+        where: { id: reservation.vehicleId },
+        data: { disponible: true },
+      });
     }
 
     return reservation;
   }
 
-  async delete(id: string): Promise<Reservation> {
-    const reservation = await this.reservationModel.findByIdAndDelete(id).exec();
-    if (!reservation) throw new NotFoundException('Réservation non trouvée');
-
-    const vehicle = await this.vehicleModel.findById(reservation.vehicleId).exec();
-    if (vehicle) {
-      vehicle.disponible = true;
-      await vehicle.save();
-    }
+  async delete(id: number): Promise<Reservation> {
+    const reservation = await this.prisma.reservation.delete({ where: { id } });
+    
+    await this.prisma.vehicle.update({
+      where: { id: reservation.vehicleId },
+      data: { disponible: true },
+    });
 
     return reservation;
   }
 }
+

@@ -1,127 +1,106 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Promotion, PromotionDocument, StatutPromotion } from 'src/modules/promotions/schemas/promotion.schema';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '../../../prisma.service';
+import {
+  Promotion,
+  StatutPromotion,
+  TypePromotion,
+} from '@prisma/client';
 import { CreatePromotionDto } from 'src/modules/promotions/dto/create-promotion.dto';
 import { UpdatePromotionDto } from 'src/modules/promotions/dto/update-promotion.dto';
 
 @Injectable()
 export class PromotionsService {
   constructor(
-    @InjectModel(Promotion.name)
-    private promotionModel: Model<PromotionDocument>,
+    private prisma: PrismaService,
   ) {}
 
-  async create(createPromotionDto: CreatePromotionDto): Promise<PromotionDocument> {
-  try {
-    // Validation des dates
-    const dateDebut = new Date(createPromotionDto.dateDebut);
-    const dateFin = new Date(createPromotionDto.dateFin);
+  async create(dto: CreatePromotionDto): Promise<Promotion> {
+    try {
+      const dateDebut = new Date(dto.dateDebut);
+      const dateFin = new Date(dto.dateFin);
 
-    // Vérifier que la date de fin est après la date de début
-    if (dateFin <= dateDebut) {
-      throw new BadRequestException('La date de fin doit être postérieure à la date de début');
-    }
+      if (dateFin <= dateDebut) {
+        throw new BadRequestException('La date de fin doit être postérieure à la date de début');
+      }
 
-    // Normaliser les dates à minuit pour comparer uniquement jour/mois/année
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    const dateDebutNormalized = new Date(dateDebut);
-    dateDebutNormalized.setHours(0, 0, 0, 0);
+      const dateDebutNormalized = new Date(dateDebut);
+      dateDebutNormalized.setHours(0, 0, 0, 0);
 
-    if (dateDebutNormalized < today) {
-      throw new BadRequestException('La date de début ne peut pas être dans le passé');
-    }
+      if (dateDebutNormalized < today) {
+        throw new BadRequestException('La date de début ne peut pas être dans le passé');
+      }
 
-    // Validation de la valeur selon le type
-    if (createPromotionDto.type === 'pourcentage' && createPromotionDto.valeur > 100) {
-      throw new BadRequestException('Le pourcentage ne peut pas dépasser 100%');
-    }
+      if (dto.type === 'pourcentage' && dto.valeur > 100) {
+        throw new BadRequestException('Le pourcentage ne peut pas dépasser 100%');
+      }
 
-    const promotion = new this.promotionModel({
-      titre: createPromotionDto.titre,
-      description: createPromotionDto.description,
-      type: createPromotionDto.type,
-      valeur: createPromotionDto.valeur,
-      dateDebut,
-      dateFin,
-      vehiculeId: createPromotionDto.vehiculeId,
-      utilisationMax: createPromotionDto.utilisationMax ?? 0,
-      codesPromo: createPromotionDto.codesPromo ?? [],
-      dureeMinLocation: createPromotionDto.dureeMinLocation ?? 1,
-      montantMinCommande: createPromotionDto.montantMinCommande ?? 0,
-      utilisations: 0,
-      statut: 'active',
-      deleted: false,
-    });
+      const codesPromo = (dto.codesPromo ?? [])
+        .map(code => code.trim())
+        .filter(code => code.length > 0);
 
-    return await promotion.save();
-  } catch (error) {
-    throw new BadRequestException(`Erreur lors de la création de la promotion: ${error.message}`);
-  }
-}
+      const vehiculesIds = (dto.vehiculesIds as any as string[] ?? []).map(id => parseInt(id));
 
-
-  async findAll(): Promise<PromotionDocument[]> {
-    return this.promotionModel
-      .find({ deleted: false, statut: 'active' })
-      .sort({ createdAt: -1 })
-      .exec();
-  }
-
-  async findAllAdmin(): Promise<PromotionDocument[]> {
-    return this.promotionModel
-      .find({ deleted: false })
-      .sort({ createdAt: -1 })
-      .exec();
-  }
-
-  async findActive(): Promise<PromotionDocument[]> {
-    const now = new Date();
-    return this.promotionModel.aggregate([
-      {
-        $match: {
+      return await this.prisma.promotion.create({
+        data: {
+          titre: dto.titre,
+          description: dto.description,
+          type: dto.type as TypePromotion,
+          valeur: dto.valeur,
+          dateDebut,
+          dateFin,
+          vehiculesIds,
+          utilisationMax: dto.utilisationMax ?? 0,
+          codesPromo,
+          dureeMinLocation: dto.dureeMinLocation ?? 1,
+          montantMinCommande: dto.montantMinCommande ?? 0,
+          utilisations: 0,
+          statut: StatutPromotion.active,
           deleted: false,
-          statut: 'active',
-          dateDebut: { $lte: now },
-          dateFin: { $gte: now },
         },
-      },
-      {
-        $addFields: {
-          vehiculeIdObj: { $toObjectId: '$vehiculeId' },
-        },
-      },
-      {
-        $lookup: {
-          from: 'vehicles',
-          localField: 'vehiculeIdObj',
-          foreignField: '_id',
-          as: 'vehicule',
-        },
-      },
-      {
-        $unwind: '$vehicule',
-      },
-      {
-        $match: {
-          'vehicule.deleted': false,
-        },
-      },
-      {
-        $project: {
-          vehicule: 0,
-          vehiculeIdObj: 0,
-        },
-      },
-    ]);
+      });
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(`Erreur lors de la création de la promotion: ${error.message}`);
+    }
   }
 
-  async findById(id: string): Promise<PromotionDocument> {
-    const promotion = await this.promotionModel
-      .findById(id)
-      .exec();
+  async findAll(): Promise<Promotion[]> {
+    return this.prisma.promotion.findMany({
+      where: { deleted: false, statut: StatutPromotion.active },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findAllAdmin(): Promise<Promotion[]> {
+    return this.prisma.promotion.findMany({
+      where: { deleted: false },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findActive(): Promise<Promotion[]> {
+    const now = new Date();
+    return this.prisma.promotion.findMany({
+      where: {
+        deleted: false,
+        statut: StatutPromotion.active,
+        dateDebut: { lte: now },
+        dateFin: { gte: now },
+      },
+    });
+  }
+
+  async findById(id: number): Promise<Promotion> {
+    const promotion = await this.prisma.promotion.findUnique({
+      where: { id },
+    });
 
     if (!promotion || promotion.deleted) {
       throw new NotFoundException('Promotion introuvable');
@@ -130,78 +109,82 @@ export class PromotionsService {
     return promotion;
   }
 
-  async findByCode(code: string): Promise<PromotionDocument | null> {
-    return this.promotionModel
-      .findOne({
+  async findByCode(code: string): Promise<Promotion | null> {
+    return this.prisma.promotion.findFirst({
+      where: {
         deleted: false,
-        statut: 'active',
-        codesPromo: code,
-        dateDebut: { $lte: new Date() },
-        dateFin: { $gte: new Date() },
-      })
-      .exec();
+        statut: StatutPromotion.active,
+        codesPromo: { has: code },
+        dateDebut: { lte: new Date() },
+        dateFin: { gte: new Date() },
+      },
+    });
   }
 
-  async update(id: string, updatePromotionDto: UpdatePromotionDto): Promise<PromotionDocument> {
+  async update(id: number, dto: UpdatePromotionDto): Promise<Promotion> {
     const promotion = await this.findById(id);
 
-    // Validation des dates si elles sont modifiées
-    if (updatePromotionDto.dateDebut || updatePromotionDto.dateFin) {
-      const dateDebut = updatePromotionDto.dateDebut
-        ? new Date(updatePromotionDto.dateDebut)
-        : promotion.dateDebut;
-      const dateFin = updatePromotionDto.dateFin
-        ? new Date(updatePromotionDto.dateFin)
-        : promotion.dateFin;
+    if (dto.dateDebut || dto.dateFin) {
+      const dateDebut = dto.dateDebut ? new Date(dto.dateDebut) : promotion.dateDebut;
+      const dateFin = dto.dateFin ? new Date(dto.dateFin) : promotion.dateFin;
 
       if (dateFin <= dateDebut) {
         throw new BadRequestException('La date de fin doit être postérieure à la date de début');
       }
     }
 
-    Object.assign(promotion, updatePromotionDto);
-    return await promotion.save();
+    const updateData: any = { ...dto };
+    if (dto.vehiculesIds) {
+      updateData.vehiculesIds = (dto.vehiculesIds as any as string[]).map(vid => parseInt(vid));
+    }
+
+    return await this.prisma.promotion.update({
+      where: { id },
+      data: updateData,
+    });
   }
 
-  async delete(id: string): Promise<void> {
-    const promotion = await this.findById(id);
-    promotion.deleted = true;
-    promotion.deletedAt = new Date();
-    await promotion.save();
+  async delete(id: number): Promise<void> {
+    await this.prisma.promotion.update({
+      where: { id },
+      data: { deleted: true, deletedAt: new Date() },
+    });
   }
 
-  async incrementUtilisation(id: string): Promise<void> {
-    await this.promotionModel.findByIdAndUpdate(id, { $inc: { utilisations: 1 } });
+  async incrementUtilisation(id: number): Promise<void> {
+    await this.prisma.promotion.update({
+      where: { id },
+      data: { utilisations: { increment: 1 } },
+    });
   }
 
-  async appliquerPromotion(promotionId: string, montantBase: number, vehiculeId?: string): Promise<{
+  async appliquerPromotion(promotionId: number, montantBase: number, vehiculeId?: number): Promise<{
     montantRemise: number;
     montantFinal: number;
-    promotion: PromotionDocument;
+    promotion: Promotion;
   }> {
     const promotion = await this.findById(promotionId);
 
-    // Vérifier si la promotion est applicable
     const now = new Date();
-    if (promotion.statut !== 'active' ||
+    if (promotion.statut !== StatutPromotion.active ||
         promotion.dateDebut > now ||
         promotion.dateFin < now) {
       throw new BadRequestException('Cette promotion n\'est pas active');
     }
 
-    // Vérifier les limites d'utilisation
     if (promotion.utilisationMax && promotion.utilisationMax > 0 && promotion.utilisations >= promotion.utilisationMax) {
       throw new BadRequestException('Cette promotion a atteint sa limite d\'utilisation');
     }
 
-    // Vérifier si la promotion s'applique au véhicule
-    if (promotion.vehiculeId && vehiculeId && promotion.vehiculeId.toString() !== vehiculeId) {
-      throw new BadRequestException('Cette promotion ne s\'applique pas à ce véhicule');
+    if (promotion.vehiculesIds && promotion.vehiculesIds.length > 0 && vehiculeId) {
+      const isApplicable = promotion.vehiculesIds.includes(vehiculeId);
+      if (!isApplicable) {
+        throw new BadRequestException('Cette promotion ne s\'applique pas à ce véhicule');
+      }
     }
 
-    // Calculer la remise
     let montantRemise = 0;
-    if (promotion.type === 'pourcentage') {
+    if (promotion.type === TypePromotion.pourcentage) {
       montantRemise = (montantBase * promotion.valeur) / 100;
     } else {
       montantRemise = Math.min(promotion.valeur, montantBase);
@@ -209,7 +192,6 @@ export class PromotionsService {
 
     const montantFinal = Math.max(0, montantBase - montantRemise);
 
-    // Incrémenter le compteur d'utilisation
     await this.incrementUtilisation(promotionId);
 
     return {

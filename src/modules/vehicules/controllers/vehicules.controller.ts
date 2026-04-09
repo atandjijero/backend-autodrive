@@ -9,8 +9,10 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   HttpException,
   HttpStatus,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags, ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { VehiclesService } from 'src/modules/vehicules/services/vehicucles.service';
@@ -18,22 +20,22 @@ import { CreateVehicleDto } from 'src/modules/vehicules/dto/create-vehicule.dto'
 import { UpdateVehicleDto } from 'src/modules/vehicules/dto/update-vehicule.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { AdminGuard } from 'src/auth/guards/admin.guard';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { extname } from 'path';
 import { ConfigService } from '@nestjs/config';
+import { CloudinaryService } from 'src/shared/cloudinary.service';
 
 @ApiTags('vehicles')
 @ApiBearerAuth()
 @Controller('vehicles')
-//@UseGuards(JwtAuthGuard) 
 export class VehiclesController {
   constructor(
     private readonly vehiclesService: VehiclesService,
     private readonly configService: ConfigService,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
-  // Filtre pour n’accepter que les images
   private static imageFileFilter(req, file, cb) {
     if (!file.originalname.match(/\.(jpg|jpeg|png)$/i)) {
       return cb(
@@ -44,47 +46,21 @@ export class VehiclesController {
     cb(null, true);
   }
 
-  // Génération de nom de fichier unique
-  private static filename(req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const fileExt = extname(file.originalname).toLowerCase();
-    cb(null, file.fieldname + '-' + uniqueSuffix + fileExt);
-  }
-
   @Post()
-  @UseGuards(AdminGuard)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads/vehicles',
-        filename: VehiclesController.filename,
-      }),
+    FilesInterceptor('files', 10, {
+      storage: memoryStorage(),
       fileFilter: VehiclesController.imageFileFilter,
     }),
   )
   @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        carrosserie: { type: 'string' },
-        modele: { type: 'string' },
-        marque: { type: 'string' },
-        transmission: { type: 'string', enum: ['manuelle', 'automatique'] },
-        prix: { type: 'number' },
-        immatriculation: { type: 'string' },
-        file: { type: 'string', format: 'binary' },
-      },
-    },
-  })
-  async create(@Body() dto: CreateVehicleDto, @UploadedFile() file: Express.Multer.File) {
-    let photoUrl: string | undefined;
-    if (file) {
-      const serverUrl = this.configService.get<string>('SERVER_URL') || 'http://localhost:9000';
-      photoUrl = `${serverUrl}/uploads/vehicles/${file.filename}`;
+  async create(@Body() dto: CreateVehicleDto, @UploadedFiles() files: Express.Multer.File[]) {
+    let photoUrls: string[] = [];
+    if (files && files.length > 0) {
+      photoUrls = await this.cloudinaryService.uploadMultipleImages(files, 'vehicles');
     }
-    return this.vehiclesService.create({ ...dto, photos: photoUrl ? [photoUrl] : [] });
+    return this.vehiclesService.create({ ...dto, photos: photoUrls });
   }
 
   @Get()
@@ -103,102 +79,66 @@ export class VehiclesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseIntPipe) id: number) {
     return this.vehiclesService.findOne(id);
   }
 
   @Put(':id')
-@UseGuards(AdminGuard)
-@UseGuards(JwtAuthGuard)
-@UseInterceptors(
-  FileInterceptor('file', {
-    storage: diskStorage({
-      destination: './uploads/vehicles',
-      filename: VehiclesController.filename,
-    }),
-    fileFilter: VehiclesController.imageFileFilter,
-  }),
-)
-@ApiConsumes('multipart/form-data')
-@ApiBody({
-  schema: {
-    type: 'object',
-    properties: {
-      carrosserie: { type: 'string' },
-      modele: { type: 'string' },
-      marque: { type: 'string' },
-      transmission: { type: 'string', enum: ['manuelle', 'automatique'] },
-      prix: { type: 'number' },
-      immatriculation: { type: 'string' },
-      photos: { type: 'array', items: { type: 'string' } }, // URLs existantes
-      file: { type: 'string', format: 'binary' }, // nouvelle photo optionnelle
-    },
-  },
-})
-async update(
-  @Param('id') id: string,
-  @UploadedFile() file: Express.Multer.File,
-  @Body() dto: UpdateVehicleDto,
-) {
-  let newPhotoUrl: string | undefined;
-
-  //  Si un fichier est envoyé, on génère son URL
-  if (file) {
-    const serverUrl = this.configService.get<string>('SERVER_URL') || 'http://localhost:9000';
-    newPhotoUrl = `${serverUrl}/uploads/vehicles/${file.filename}`;
-  }
-
-  //  Fusion des anciennes photos + nouvelle photo
-  const updatedPhotos = [
-    ...(dto.photos ?? []), // anciennes photos envoyées par le frontend
-    ...(newPhotoUrl ? [newPhotoUrl] : []), // nouvelle photo uploadée
-  ];
-
-  return this.vehiclesService.update(id, {
-    ...dto,
-    photos: updatedPhotos,
-  });
-}
-
-
-
-  @Put(':id/unavailable')
-  @UseGuards(AdminGuard)
-  @UseGuards(JwtAuthGuard)
-  async markUnavailable(@Param('id') id: string) {
-    return this.vehiclesService.markUnavailable(id);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.vehiclesService.remove(id);
-  }
-
-  @Post(':id/photo')
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads/vehicles',
-        filename: VehiclesController.filename,
-      }),
+    FilesInterceptor('files', 10, {
+      storage: memoryStorage(),
       fileFilter: VehiclesController.imageFileFilter,
     }),
   )
   @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: { type: 'string', format: 'binary' },
-      },
-    },
-  })
-  async uploadPhoto(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body() dto: UpdateVehicleDto,
+  ) {
+    let newPhotoUrls: string[] = [];
+    if (files && files.length > 0) {
+      newPhotoUrls = await this.cloudinaryService.uploadMultipleImages(files, 'vehicles');
+    }
+
+    const updatedPhotos = [
+      ...(dto.photos ?? []),
+      ...newPhotoUrls,
+    ];
+
+    return this.vehiclesService.update(id, {
+      ...dto,
+      photos: updatedPhotos,
+    });
+  }
+
+  @Put(':id/unavailable')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  async markUnavailable(@Param('id', ParseIntPipe) id: number) {
+    return this.vehiclesService.markUnavailable(id);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.vehiclesService.remove(id);
+  }
+
+  @Post(':id/photo')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      fileFilter: VehiclesController.imageFileFilter,
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  async uploadPhoto(@Param('id', ParseIntPipe) id: number, @UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new HttpException('Aucun fichier fourni', HttpStatus.BAD_REQUEST);
     }
-    const serverUrl = this.configService.get<string>('SERVER_URL') || 'http://localhost:9000';
-    const photoUrl = `${serverUrl}/uploads/vehicles/${file.filename}`;
+    const photoUrl = await this.cloudinaryService.uploadImage(file, 'vehicles');
     return this.vehiclesService.addPhoto(id, photoUrl);
   }
 }

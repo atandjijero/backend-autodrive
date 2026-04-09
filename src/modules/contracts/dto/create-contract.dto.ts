@@ -1,16 +1,18 @@
-import { IsNotEmpty, IsDateString, IsNumber, Min, IsOptional, IsString, IsMongoId, ValidateIf } from 'class-validator';
+import { IsNotEmpty, IsDateString, IsNumber, Min, IsOptional, IsString, ValidateIf } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 
 export class CreateContractDto {
   @ApiProperty({
     description: 'ID du véhicule',
-    example: '507f1f77bcf86cd799439011',
+    example: 123,
     required: false
   })
   @IsOptional()
   @ValidateIf((o) => o.vehicleId !== undefined && o.vehicleId !== null && o.vehicleId !== '')
-  @IsMongoId()
-  vehicleId?: string;
+  @Type(() => Number)
+  @IsNumber()
+  vehicleId?: number;
 
   @ApiProperty({
     description: 'Date de début de location',
@@ -18,7 +20,7 @@ export class CreateContractDto {
   })
   @IsNotEmpty()
   @IsDateString()
-  dateDebut: string;
+  dateDebut!: string;
 
   @ApiProperty({
     description: 'Date de fin de location',
@@ -26,7 +28,7 @@ export class CreateContractDto {
   })
   @IsNotEmpty()
   @IsDateString()
-  dateFin: string;
+  dateFin!: string;
 
   @ApiProperty({
     description: 'Montant total du contrat',
@@ -35,7 +37,7 @@ export class CreateContractDto {
   @IsNotEmpty()
   @IsNumber()
   @Min(0)
-  montantTotal: number;
+  montantTotal!: number;
 
   @ApiProperty({
     description: 'Acompte versé',

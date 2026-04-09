@@ -1,22 +1,24 @@
-import { IsOptional, IsEnum, IsString, IsNumber, Min, IsDate, IsMongoId, ValidateIf } from 'class-validator';
+import { IsOptional, IsEnum, IsString, IsNumber, Min, IsDate, ValidateIf } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { ContractStatus } from '../schemas/contract.schema';
+import { Type } from 'class-transformer';
+import { ContractStatus } from '@prisma/client';
 
 export class UpdateContractDto {
   @ApiProperty({
     description: 'ID du véhicule',
-    example: '507f1f77bcf86cd799439011',
+    example: 123,
     required: false
   })
   @IsOptional()
   @ValidateIf((o) => o.vehicleId !== undefined && o.vehicleId !== null && o.vehicleId !== '')
-  @IsMongoId()
-  vehicleId?: string;
+  @Type(() => Number)
+  @IsNumber()
+  vehicleId?: number;
 
   @ApiProperty({
     description: 'Statut du contrat',
     enum: ContractStatus,
-    example: ContractStatus.Approved,
+    example: ContractStatus.approved,
     required: false
   })
   @IsOptional()
@@ -72,10 +74,11 @@ export class UpdateContractDto {
 
   @ApiProperty({
     description: 'ID de l\'admin qui a validé',
-    example: '507f1f77bcf86cd799439011',
+    example: 123,
     required: false
   })
   @IsOptional()
-  @IsMongoId()
-  validePar?: string;
+  @Type(() => Number)
+  @IsNumber()
+  validePar?: number;
 }

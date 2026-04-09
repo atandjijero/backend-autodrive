@@ -1,23 +1,29 @@
 import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Contact, ContactDocument } from 'src/modules/contact/schemas/contact.schema';
+import { PrismaService } from '../../../prisma.service';
+import { Contact, ContactStatus } from '@prisma/client';
 
 @Injectable()
 export class NotificationsService {
   constructor(
-    @InjectModel(Contact.name) private contactModel: Model<ContactDocument>,
+    private prisma: PrismaService,
   ) {}
 
   async getUnreadContactsCount(): Promise<number> {
-    return this.contactModel.countDocuments({ status: 'pending' }).exec();
+    return this.prisma.contact.count({
+      where: { status: ContactStatus.pending }
+    });
   }
 
   async listUnread(): Promise<Contact[]> {
-    return this.contactModel.find({ status: 'pending' }).sort({ createdAt: -1 }).exec();
+    return this.prisma.contact.findMany({
+      where: { status: ContactStatus.pending },
+      orderBy: { createdAt: 'desc' }
+    });
   }
 
   async listAll(): Promise<Contact[]> {
-    return this.contactModel.find().sort({ createdAt: -1 }).exec();
+    return this.prisma.contact.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
   }
 }

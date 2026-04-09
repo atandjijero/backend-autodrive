@@ -1,66 +1,53 @@
 import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { User, UserDocument } from 'src/auth/schemas/user.schema';
-import { Reservation } from 'src/modules/reservations/schema/reservation.schema';
-import { Paiement } from 'src/modules/paiements/schemas/paiement.schema';
-import { Promotion } from 'src/modules/promotions/schemas/promotion.schema';
+import { PrismaService } from '../../../prisma.service';
 import { CreateTemoignageDto } from '../dto/create-temoignage.dto';
 
 @Injectable()
 export class DashboardService {
-  constructor(
-    @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @InjectModel(Reservation.name) private reservationModel: Model<Reservation>,
-    @InjectModel(Paiement.name) private paiementModel: Model<Paiement>,
-    @InjectModel(Promotion.name) private promotionModel: Model<Promotion>,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   async getDashboard(userId: string) {
     try {
-      const user = await this.userModel.findById(userId).exec();
-      if (!user || user.deleted) throw new NotFoundException('Utilisateur introuvable');
+      const user = await this.prisma.user.findUnique({
+        where: { id: parseInt(userId), deleted: false },
+      });
+      if (!user) throw new NotFoundException('Utilisateur introuvable');
 
-      const reservations = await this.reservationModel
-        .find({ clientId: new Types.ObjectId(userId) })
-        .populate('vehicleId')
-        .populate('promotionId')
-        .exec();
+      const reservations = await this.prisma.reservation.findMany({
+        where: { clientId: parseInt(userId) },
+        include: {
+          vehicle: true,
+          promotion: true,
+        },
+      });
 
-      const reservationIds = reservations.map(r => r._id);
+      const reservationIds = reservations.map(r => r.id);
 
-      const paiements = await this.paiementModel
-        .find({
-          $or: [
-            { reservationId: { $in: reservationIds } },
-            { reservationId: { $in: reservationIds.map(id => id.toString()) } }
-          ]
-        })
-        .populate('promotionId')
-        .exec();
+      const paiements = await this.prisma.paiement.findMany({
+        where: {
+          reservationId: { in: reservationIds },
+        },
+        include: {
+          reservation: {
+            include: {
+              promotion: true,
+            },
+          },
+        },
+      });
 
-      // Extraction robuste des IDs de promotion (string | ObjectId | document peuplé)
-      const promotionCandidates = [
-        ...reservations.map(r => r.promotionId).filter(Boolean),
-        ...paiements.map(p => p.promotionId).filter(Boolean)
-      ];
-
+      // Get unique promotion IDs from reservations and payments
       const promotionIds = [
-        ...new Set(
-          promotionCandidates
-            .map(id => {
-              if (!id) return null;
-              if (typeof id === 'string') return id;
-              if (Types.ObjectId.isValid(id) && !(id as any)._id) return id.toString();
-              if (typeof id === 'object' && (id as any)._id) return (id as any)._id.toString();
-              try { return (id as any).toString(); } catch { return null; }
-            })
-            .filter(Boolean) as string[]
-        )
+        ...new Set([
+          ...reservations.map(r => r.promotionId).filter(Boolean),
+          ...paiements.map(p => p.reservation?.promotionId).filter(Boolean),
+        ].filter(Boolean) as number[])
       ];
 
       const promotions = promotionIds.length > 0
-        ? await this.promotionModel.find({ _id: { $in: promotionIds } }).exec()
+        ? await this.prisma.promotion.findMany({
+            where: { id: { in: promotionIds } },
+          })
         : [];
 
       return {
@@ -76,51 +63,65 @@ export class DashboardService {
         temoignages: user.temoignages ?? [],
       };
     } catch (err) {
-      console.error('Erreur getDashboard:', err && err.stack ? err.stack : err);
+      console.error('Erreur getDashboard:', err);
       throw new InternalServerErrorException('Erreur serveur lors de la récupération du dashboard');
     }
   }
 
   async addTemoignage(userId: string, dto: CreateTemoignageDto) {
-    const user = await this.userModel.findByIdAndUpdate(
-      userId,
-      { $push: { temoignages: dto.message } },
-      { new: true },
-    );
-    if (!user) throw new NotFoundException('Utilisateur introuvable');
-    return user.temoignages;
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: parseInt(userId) },
+        data: {
+          temoignages: {
+            push: dto.message,
+          },
+        },
+      });
+      return user.temoignages;
+    } catch (error) {
+      throw new NotFoundException('Utilisateur introuvable');
+    }
   }
 
   async deleteTemoignage(userId: string, message: string) {
-    const user = await this.userModel.findById(userId).exec();
-    if (!user || user.deleted) throw new NotFoundException('Utilisateur introuvable');
+    const user = await this.prisma.user.findUnique({
+      where: { id: parseInt(userId), deleted: false },
+    });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
 
     const updatedTemoignages = (user.temoignages ?? []).filter(t => t !== message);
-    await this.userModel.findByIdAndUpdate(userId, { temoignages: updatedTemoignages });
+    await this.prisma.user.update({
+      where: { id: parseInt(userId) },
+      data: { temoignages: updatedTemoignages },
+    });
     return updatedTemoignages;
   }
 
   async getTemoignages(userId: string) {
-  const user = await this.userModel.findById(userId).exec();
-  if (!user || user.deleted) throw new NotFoundException('Utilisateur introuvable');
+    const user = await this.prisma.user.findUnique({
+      where: { id: parseInt(userId) },
+    });
+    if (!user || user.deleted) throw new NotFoundException('Utilisateur introuvable');
 
-  // On renvoie les témoignages enrichis avec nom/prénom
-  return (user.temoignages ?? []).map(message => ({
-    nom: user.nom,
-    prenom: user.prenom,
-    message,
-  }));
-}
+    return (user.temoignages ?? []).map(message => ({
+      nom: user.nom,
+      prenom: user.prenom,
+      message,
+    }));
+  }
 
   async getAllTemoignages() {
-    // ✅ MIEUX - retourne TOUS les utilisateurs avec des témoignages
-    const users = await this.userModel.find({ deleted: false }).exec();
+    const users = await this.prisma.user.findMany({
+      where: { deleted: false },
+      select: { nom: true, prenom: true, temoignages: true },
+    });
     const allTemoignages: { nom: string; prenom: string; message: string }[] = [];
-    
+
     for (const user of users) {
       if (user.temoignages && Array.isArray(user.temoignages)) {
         for (const message of user.temoignages) {
-          if (message && message.trim()) {  // Vérifie que le message n'est pas vide
+          if (message && message.trim()) {
             allTemoignages.push({
               nom: user.nom,
               prenom: user.prenom,

@@ -4,15 +4,15 @@ import { Transform } from 'class-transformer';
 export class CreatePostDto {
   @IsString()
   @IsNotEmpty()
-  title: string;
+  title!: string;
 
   @IsString()
   @IsNotEmpty()
-  slug: string;
+  slug!: string;
 
   @IsString()
   @IsNotEmpty()
-  body: string;
+  body!: string;
 
   @IsOptional()
   @IsString()

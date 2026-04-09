@@ -7,37 +7,37 @@ export class CreateAgencyDto {
   @ApiProperty({ description: 'Nom de l\'agence', example: 'Agence Paris Centre' })
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @ApiProperty({ description: 'Adresse de l\'agence', example: '123 Rue de la Paix' })
   @IsString()
   @IsNotEmpty()
-  address: string;
+  address!: string;
 
   @ApiProperty({ description: 'Ville de l\'agence', example: 'Paris' })
   @IsString()
   @IsNotEmpty()
-  city: string;
+  city!: string;
 
   @ApiProperty({ description: 'Code postal', example: '75001' })
   @IsString()
   @IsNotEmpty()
-  postalCode: string;
+  postalCode!: string;
 
   @ApiProperty({ description: 'Pays', example: 'France' })
   @IsString()
   @IsNotEmpty()
-  country: string;
+  country!: string;
 
   @ApiProperty({ description: 'Numéro de téléphone', example: '+33123456789' })
   @IsString()
   @IsNotEmpty()
-  phone: string;
+  phone!: string;
 
   @ApiProperty({ description: 'Adresse email', example: 'contact@agence-paris.fr' })
   @IsEmail()
   @IsNotEmpty()
-  email: string;
+  email!: string;
 
   @ApiPropertyOptional({ description: 'Nom du responsable', example: 'Jean Dupont' })
   @IsOptional()

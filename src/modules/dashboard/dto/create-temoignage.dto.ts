@@ -9,5 +9,5 @@ export class CreateTemoignageDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(500)
-  message: string;
+  message!: string;
 }

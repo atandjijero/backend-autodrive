@@ -1,10 +1,9 @@
-import { Controller, Get, Param, Query, Res, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Param, Query, Res, BadRequestException, ParseIntPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
 import PDFKit from 'pdfkit';
 import * as fs from 'fs';
 import * as path from 'path';
-import { AgencyDocument } from '../schemas/agency.schema';
 import { AgenciesService } from '../services/agencies.service';
 import { AgencyResponseDto } from '../dto/agency-response.dto';
 import { AgenciesListResponseDto } from '../dto/agencies-list-response.dto';
@@ -92,7 +91,7 @@ export class AgenciesPublicController {
   @ApiParam({ name: 'id', description: 'ID de l\'agence' })
   @ApiResponse({ status: 200, description: 'Agence trouvée', type: AgencyResponseDto })
   @ApiResponse({ status: 404, description: 'Agence non trouvée' })
-  async getById(@Param('id') id: string) {
+  async getById(@Param('id', ParseIntPipe) id: number) {
     return this.agenciesService.findById(id);
   }
 
@@ -101,8 +100,8 @@ export class AgenciesPublicController {
   @ApiParam({ name: 'id', description: 'ID de l\'agence' })
   @ApiResponse({ status: 200, description: 'PDF généré avec succès' })
   @ApiResponse({ status: 404, description: 'Agence non trouvée' })
-  async exportAgencyToPdf(@Param('id') id: string, @Res() res: Response) {
-    const agency = await this.agenciesService.findById(id) as AgencyDocument;
+  async exportAgencyToPdf(@Param('id', ParseIntPipe) id: number, @Res() res: Response) {
+    const agency = await this.agenciesService.findById(id);
 
     // Créer un nouveau document PDF
     const doc = new PDFKit({

@@ -1,20 +1,24 @@
 import { Injectable } from '@nestjs/common';
 const PDFDocument = require('pdfkit');
+import { Reservation } from '@prisma/client';
 
-import { Reservation } from 'src/modules/reservations/schema/reservation.schema';
+type ReservationWithRelations = Reservation & {
+  client?: { prenom?: string; nom?: string; email?: string };
+  vehicle?: { marque?: string; modele?: string };
+};
 
 @Injectable()
 export class PdfService {
 
   private formatDate(date: Date | string) {
-    return new Date(date).toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
+    return new Date(date).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
     });
   }
 
-  async generateReservationReceipt(reservation: Reservation): Promise<Buffer> {
+  async generateReservationReceipt(reservation: ReservationWithRelations): Promise<Buffer> {
     return new Promise((resolve) => {
       const doc = new PDFDocument();
       const chunks: Buffer[] = [];
@@ -27,13 +31,11 @@ export class PdfService {
 
       doc.fontSize(14).text(`Numéro : ${reservation.numeroReservation}`);
 
-      // ✅ Sécurisation client
-      const client = reservation.clientId;
+      const client = reservation.client;
       doc.text(`Client : ${client?.prenom ?? ''} ${client?.nom ?? ''}`);
       doc.text(`Email : ${client?.email ?? 'Non disponible'}`);
 
-      // ✅ Sécurisation véhicule
-      const veh = reservation.vehicleId;
+      const veh = reservation.vehicle;
       doc.text(
         `Véhicule : ${
           veh
@@ -42,7 +44,6 @@ export class PdfService {
         }`
       );
 
-      // ✅ Dates formatées
       doc.text(`Début : ${this.formatDate(reservation.dateDebut)}`);
       doc.text(`Fin : ${this.formatDate(reservation.dateFin)}`);
 

@@ -1,28 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Promotion, PromotionDocument, StatutPromotion } from '../schemas/promotion.schema';
+import { PrismaService } from '../../../prisma.service';
+import { StatutPromotion } from '@prisma/client';
 
 @Injectable()
 export class PromotionsSchedulerService {
   private readonly logger = new Logger(PromotionsSchedulerService.name);
 
-  constructor(
-    @InjectModel(Promotion.name)
-    private promotionModel: Model<PromotionDocument>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleExpiredPromotions() {
     try {
       const now = new Date();
 
-      // Trouver toutes les promotions actives dont la date de fin est dépassée
-      const expiredPromotions = await this.promotionModel.find({
-        statut: StatutPromotion.Active,
-        dateFin: { $lt: now },
-        deleted: false,
+      const expiredPromotions = await this.prisma.promotion.findMany({
+        where: {
+          statut: StatutPromotion.active,
+          dateFin: { lt: now },
+          deleted: false,
+        },
       });
 
       if (expiredPromotions.length === 0) {
@@ -30,17 +27,16 @@ export class PromotionsSchedulerService {
         return;
       }
 
-      // Mettre à jour le statut des promotions expirées
-      const result = await this.promotionModel.updateMany(
-        {
-          statut: StatutPromotion.Active,
-          dateFin: { $lt: now },
+      const result = await this.prisma.promotion.updateMany({
+        where: {
+          statut: StatutPromotion.active,
+          dateFin: { lt: now },
           deleted: false,
         },
-        { $set: { statut: StatutPromotion.Inactive } }
-      );
+        data: { statut: StatutPromotion.inactive },
+      });
 
-      this.logger.log(`${result.modifiedCount} promotions marquées comme inactives`);
+      this.logger.log(`${result.count} promotions marquées comme inactives`);
 
       // Log des promotions expirées pour le suivi
       expiredPromotions.forEach(promotion => {

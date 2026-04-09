@@ -1,14 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
+  IsEnum,
   IsNotEmpty,
   IsNumber,
+  IsOptional,
   IsString,
   Matches,
   Min,
   Validate,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { MethodePaiement } from '@prisma/client';
 
 // Validation Luhn personnalisée
 export class LuhnValidator {
@@ -40,11 +43,12 @@ export class LuhnValidator {
 export class CreatePaiementDto {
   @ApiProperty({
     description: "ID de la réservation associée",
-    example: "67a1b3c4d5e6f78901234567",
+    example: 123,
   })
-  @IsString()
-  @IsNotEmpty()
-  reservationId: string;
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  reservationId!: number;
 
   @ApiProperty({
     description: "Nom complet du client",
@@ -52,14 +56,14 @@ export class CreatePaiementDto {
   })
   @IsString()
   @IsNotEmpty()
-  nom: string;
+  nom!: string;
 
   @ApiProperty({
     description: "Adresse email du client",
     example: "jean@gmail.com",
   })
   @IsEmail()
-  email: string;
+  email!: string;
 
   @ApiProperty({
     description: "Montant du paiement",
@@ -68,34 +72,56 @@ export class CreatePaiementDto {
   @Type(() => Number)
   @IsNumber()
   @Min(1)
-  montant: number;
+  montant!: number;
+
+  @ApiProperty({
+    enum: MethodePaiement,
+    description: "Mode de paiement utilisé",
+  })
+  @IsEnum(MethodePaiement)
+  methodePaiement!: MethodePaiement;
+
+  @ApiProperty({
+    description: "Numéro de téléphone pour les paiements mobiles (TMoney, Flooz)",
+    example: "90000000",
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  telephone?: string;
 
   @ApiProperty({
     description: "Numéro de carte bancaire (16 chiffres)",
     example: "4242424242424242",
+    required: false,
   })
+  @IsOptional()
   @IsString()
   @Matches(/^\d{16}$/, {
     message: "Le numéro de carte doit contenir exactement 16 chiffres",
   })
   @Validate(LuhnValidator)
-  numeroCarte: string;
+  numeroCarte?: string;
 
   @ApiProperty({
     description: "Date d'expiration (MM/AA)",
     example: "12/25",
+    required: false,
   })
+  @IsOptional()
   @Matches(/^(0[1-9]|1[0-2])\/\d{2}$/, {
     message: "Format d'expiration invalide. Exemple : 12/25",
-  })
-  expiration: string;
+  } )
+  expiration?: string;
 
   @ApiProperty({
     description: "Code de sécurité CVV (3 chiffres)",
     example: "123",
+    required: false,
   })
+  @IsOptional()
   @Matches(/^\d{3}$/, {
     message: "Le CVV doit contenir exactement 3 chiffres",
   })
-  cvv: string;
+  cvv?: string;
 }

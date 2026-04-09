@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsEnum, IsNumber, IsDateString, IsOptional, IsMongoId, Min, IsArray } from 'class-validator';
-import { TypePromotion } from '../schemas/promotion.schema';
+import { Type } from 'class-transformer';
+import { IsString, IsEnum, IsNumber, IsDateString, IsOptional, Min, IsArray } from 'class-validator';
+import { TypePromotion } from '@prisma/client';
 
 export class UpdatePromotionDto {
   @ApiPropertyOptional({
@@ -22,7 +23,7 @@ export class UpdatePromotionDto {
   @ApiPropertyOptional({
     description: 'Type de promotion',
     enum: TypePromotion,
-    example: TypePromotion.Pourcentage,
+    example: TypePromotion.pourcentage,
   })
   @IsOptional()
   @IsEnum(TypePromotion)
@@ -54,12 +55,15 @@ export class UpdatePromotionDto {
   dateFin?: string;
 
   @ApiPropertyOptional({
-    description: 'ID du véhicule spécifique (optionnel pour promo globale)',
-    example: '656f8c123abc456def789012',
+    description: 'IDs des véhicules spécifiques (optionnel pour promo globale)',
+    example: [123],
+    type: [Number],
   })
   @IsOptional()
-  @IsMongoId()
-  vehiculeId?: string;
+  @IsArray()
+  @Type(() => Number)
+  @IsNumber({}, { each: true })
+  vehiculesIds?: number[];
 
   @ApiPropertyOptional({
     description: 'Nombre maximum d\'utilisations (0 = illimité)',

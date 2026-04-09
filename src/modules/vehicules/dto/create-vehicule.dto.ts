@@ -10,15 +10,15 @@ export enum Transmission {
 export class CreateVehicleDto {
   @ApiProperty({ example: 'SUV', description: 'Type de carrosserie du véhicule' })
   @IsString()
-  carrosserie: string;
+  carrosserie!: string;
 
   @ApiProperty({ example: 'Q5', description: 'Modèle du véhicule' })
   @IsString()
-  modele: string;
+  modele!: string;
 
   @ApiProperty({ example: 'Audi', description: 'Marque du véhicule' })
   @IsString()
-  marque: string;
+  marque!: string;
 
   @ApiProperty({
     example: 'automatique',
@@ -26,13 +26,13 @@ export class CreateVehicleDto {
     enum: Transmission,
   })
   @IsEnum(Transmission)
-  transmission: Transmission;
+  transmission!: Transmission;
 
   @ApiProperty({ example: 80, description: 'Prix de location par jour en euros' })
   @IsNumber()
   @Min(0)
   @Type(() => Number) 
-  prix: number;
+  prix!: number;
 
   @ApiPropertyOptional({
     type: [String],

@@ -8,6 +8,7 @@ import {
   Body,
   UseGuards,
   BadRequestException,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,7 +25,6 @@ import { ValidateContractDto } from '../dto/validate-contract.dto';
 import { JwtAuthGuard } from '../../../auth/jwt-auth.guard';
 import { AdminGuard } from '../../../auth/guards/admin.guard';
 import { CurrentUser } from '../../../auth/current-user.decorator';
-import { isValidObjectId } from 'mongoose';
 
 @ApiTags('contracts')
 @ApiBearerAuth()
@@ -39,7 +39,7 @@ export class ContractsController {
   @ApiResponse({ status: 403, description: 'Accès refusé - Réservé aux entreprises' })
   @ApiResponse({ status: 400, description: 'Données invalides' })
   create(@Body() createContractDto: CreateContractDto, @CurrentUser() user: any) {
-    if (createContractDto.vehicleId && !isValidObjectId(createContractDto.vehicleId)) {
+    if (createContractDto.vehicleId && (isNaN(createContractDto.vehicleId) || createContractDto.vehicleId <= 0)) {
       throw new BadRequestException('ID de véhicule invalide');
     }
     return this.contractsService.create(createContractDto, user);
@@ -61,12 +61,9 @@ export class ContractsController {
   @ApiResponse({ status: 400, description: 'Contrat non approuvé' })
   @ApiResponse({ status: 404, description: 'Contrat introuvable' })
   async downloadContract(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: any
   ) {
-    if (!isValidObjectId(id)) {
-      throw new BadRequestException('ID de contrat invalide');
-    }
 
     const contract = await this.contractsService.getContractForPDF(id, user);
     return contract;
@@ -82,13 +79,10 @@ export class ContractsController {
   @ApiResponse({ status: 403, description: 'Accès refusé - Réservé aux admins' })
   @ApiResponse({ status: 404, description: 'Contrat introuvable' })
   validate(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() validateContractDto: ValidateContractDto,
     @CurrentUser() user: any
   ) {
-    if (!isValidObjectId(id)) {
-      throw new BadRequestException('ID de contrat invalide');
-    }
     return this.contractsService.validateContract(id, validateContractDto, user);
   }
 
@@ -97,10 +91,7 @@ export class ContractsController {
   @ApiParam({ name: 'id', description: 'ID du contrat' })
   @ApiResponse({ status: 200, description: 'Contrat trouvé' })
   @ApiResponse({ status: 404, description: 'Contrat introuvable' })
-  findOne(@Param('id') id: string, @CurrentUser() user: any) {
-    if (!isValidObjectId(id)) {
-      throw new BadRequestException('ID de contrat invalide');
-    }
+  findOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.contractsService.findOne(id, user);
   }
 
@@ -109,13 +100,10 @@ export class ContractsController {
   @ApiOperation({ summary: 'Mettre à jour un contrat (Admin uniquement)' })
   @ApiResponse({ status: 404, description: 'Contrat introuvable' })
   update(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() updateContractDto: UpdateContractDto,
     @CurrentUser() user: any
   ) {
-    if (!isValidObjectId(id)) {
-      throw new BadRequestException('ID de contrat invalide');
-    }
     return this.contractsService.update(id, updateContractDto, user);
   }
 
@@ -125,10 +113,7 @@ export class ContractsController {
   @ApiParam({ name: 'id', description: 'ID du contrat' })
   @ApiResponse({ status: 200, description: 'Contrat supprimé' })
   @ApiResponse({ status: 404, description: 'Contrat introuvable' })
-  delete(@Param('id') id: string, @CurrentUser() user: any) {
-    if (!isValidObjectId(id)) {
-      throw new BadRequestException('ID de contrat invalide');
-    }
+  delete(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.contractsService.delete(id, user);
   }
 }

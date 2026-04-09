@@ -1,8 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Request } from 'express';
-import { Role } from 'src/auth/schemas/user.schema'; 
-import { AuthenticatedUser } from 'src/auth/types/auth.types'; 
-
+import { Role } from '@prisma/client';
+import { AuthenticatedUser } from 'src/auth/types/auth.types';
 @Injectable()
 export class AdminGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
@@ -19,7 +18,7 @@ export class AdminGuard implements CanActivate {
      * - Seuls les utilisateurs avec le rôle ADMIN ont accès complet
      * - Les autres rôles (Client, Entreprise, Tourist) sont restreints
      */
-    const allowedRoles: Role[] = [Role.Admin];
+    const allowedRoles: Role[] = [Role.admin];
 
     if (!allowedRoles.includes(currentUser.role)) {
       throw new ForbiddenException(

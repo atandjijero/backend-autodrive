@@ -1,28 +1,23 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { Contract, ContractDocument, ContractStatus } from '../schemas/contract.schema';
+import { PrismaService } from '../../../prisma.service';
+import { ContractStatus } from '@prisma/client';
 import { CreateContractDto } from '../dto/create-contract.dto';
 import { UpdateContractDto } from '../dto/update-contract.dto';
 import { ValidateContractDto } from '../dto/validate-contract.dto';
 import { MailService } from '../../../shared/mail.service';
 import { AgenciesService } from '../../agencies/services/agencies.service';
-import { VehicleDocument } from '../../vehicules/schemas/vehicule.schema';
 import { ReservationService } from '../../reservations/services/reservation.service';
 
 @Injectable()
 export class ContractsService {
   constructor(
-    @InjectModel(Contract.name)
-    private contractModel: Model<ContractDocument>,
-    @InjectModel('Vehicle')
-    private vehicleModel: Model<VehicleDocument>,
+    private prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly agenciesService: AgenciesService,
     private readonly reservationService: ReservationService,
   ) {}
 
-  async create(createContractDto: CreateContractDto, user: any): Promise<ContractDocument> {
+  async create(createContractDto: CreateContractDto, user: any) {
     // Vérifier que l'utilisateur est une entreprise
     if (user.role !== 'entreprise') {
       throw new ForbiddenException('Seules les entreprises peuvent créer des contrats');
@@ -43,22 +38,28 @@ export class ContractsService {
 
     // Vérifier que le véhicule existe et est disponible (si fourni)
     if (createContractDto.vehicleId) {
-      const vehicle = await this.vehicleModel.findById(createContractDto.vehicleId);
-      if (!vehicle || vehicle.deleted || !vehicle.disponible) {
+      const vehicle = await this.prisma.vehicle.findUnique({
+        where: { id: createContractDto.vehicleId, deleted: false }
+      });
+      if (!vehicle || !vehicle.disponible) {
         throw new NotFoundException('Véhicule non disponible');
       }
 
       // Vérifier qu'il n'y a pas de conflit de dates pour ce véhicule
-      const conflictingContract = await this.contractModel.findOne({
-        vehicleId: createContractDto.vehicleId,
-        statut: { $in: [ContractStatus.Pending, ContractStatus.Approved] },
-        deleted: false,
-        $or: [
-          {
-            dateDebut: { $lte: dateFin },
-            dateFin: { $gte: dateDebut }
-          }
-        ]
+      const conflictingContract = await this.prisma.contract.findFirst({
+        where: {
+          vehicleId: createContractDto.vehicleId,
+          statut: { in: [ContractStatus.pending, ContractStatus.approved] },
+          deleted: false,
+          OR: [
+            {
+              AND: [
+                { dateDebut: { lte: dateFin } },
+                { dateFin: { gte: dateDebut } }
+              ]
+            }
+          ]
+        }
       });
 
       if (conflictingContract) {
@@ -66,62 +67,67 @@ export class ContractsService {
       }
     }
 
-    const contract = new this.contractModel({
-      userId: user.userId,
-      vehicleId: createContractDto.vehicleId ? new Types.ObjectId(createContractDto.vehicleId) : undefined,
-      dateDebut,
-      dateFin,
-      montantTotal: createContractDto.montantTotal,
-      acompteVerse: createContractDto.acompteVerse || 0,
-      conditionsSpeciales: createContractDto.conditionsSpeciales,
-      statut: ContractStatus.Pending,
+    return await this.prisma.contract.create({
+      data: {
+        userId: user.userId,
+        vehicleId: createContractDto.vehicleId,
+        dateDebut,
+        dateFin,
+        montantTotal: createContractDto.montantTotal,
+        acompteVerse: createContractDto.acompteVerse || 0,
+        conditionsSpeciales: createContractDto.conditionsSpeciales,
+        statut: ContractStatus.pending,
+      },
+      include: {
+        user: { select: { nom: true, prenom: true, email: true, telephone: true, role: true } },
+        vehicle: { select: { marque: true, modele: true, immatriculation: true, prix: true, photos: true } },
+        valideParUser: { select: { nom: true, prenom: true } },
+      },
     });
-
-    return await contract.save();
   }
 
-  async findAll(user: any): Promise<ContractDocument[]> {
-    let filter: any = { deleted: false };
+  async findAll(user: any) {
+    const where: any = { deleted: false };
 
     // Si ce n'est pas un admin, ne montrer que ses propres contrats
     if (user.role !== 'admin') {
-      filter.userId = user.userId;
+      where.userId = user.userId;
     }
 
-    return this.contractModel
-      .find(filter)
-      .populate('userId', 'nom prenom email telephone role')
-      .populate('vehicleId', 'marque modele immatriculation prix photos')
-      .populate('validePar', 'nom prenom')
-      .sort({ createdAt: -1 })
-      .exec();
+    return this.prisma.contract.findMany({
+      where,
+      include: {
+        user: { select: { nom: true, prenom: true, email: true, telephone: true, role: true } },
+        vehicle: { select: { marque: true, modele: true, immatriculation: true, prix: true, photos: true } },
+        valideParUser: { select: { nom: true, prenom: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  async findOne(id: string, user: any): Promise<ContractDocument> {
-    const contract = await this.contractModel
-      .findById(id)
-      .populate('userId', 'nom prenom email telephone role')
-      .populate('vehicleId', 'marque modele immatriculation prix photos')
-      .populate('validePar', 'nom prenom')
-      .exec();
+  async findOne(id: number, user: any) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id, deleted: false },
+      include: {
+        user: { select: { nom: true, prenom: true, email: true, telephone: true, role: true } },
+        vehicle: { select: { marque: true, modele: true, immatriculation: true, prix: true, photos: true } },
+        valideParUser: { select: { nom: true, prenom: true } },
+      },
+    });
 
-    if (!contract || contract.deleted) {
+    if (!contract) {
       throw new NotFoundException('Contrat introuvable');
     }
 
     // Vérifier que l'utilisateur peut voir ce contrat
-    const contractUserId = typeof contract.userId === 'object' ? contract.userId._id : contract.userId;
-    const userIdToCompare = user.userId instanceof Types.ObjectId ? user.userId.toString() : String(user.userId);
-    const contractUserIdStr = contractUserId instanceof Types.ObjectId ? contractUserId.toString() : String(contractUserId);
-    
-    if (user.role !== 'admin' && contractUserIdStr !== userIdToCompare) {
+    if (user.role !== 'admin' && contract.userId !== user.userId) {
       throw new ForbiddenException('Accès non autorisé à ce contrat');
     }
 
     return contract;
   }
 
-  async update(id: string, updateContractDto: UpdateContractDto, user: any): Promise<ContractDocument> {
+  async update(id: number, updateContractDto: UpdateContractDto, user: any) {
     const contract = await this.findOne(id, user);
 
     // Seuls les admins peuvent changer le statut
@@ -131,57 +137,63 @@ export class ContractsService {
 
     // Si un vehicleId est fourni lors de la mise à jour, vérifier qu'il est valide
     if (updateContractDto.vehicleId) {
-      const vehicle = await this.vehicleModel.findById(updateContractDto.vehicleId);
-      if (!vehicle || vehicle.deleted || !vehicle.disponible) {
+      const vehicle = await this.prisma.vehicle.findUnique({
+        where: { id: updateContractDto.vehicleId, deleted: false }
+      });
+      if (!vehicle || !vehicle.disponible) {
         throw new NotFoundException('Véhicule non disponible');
       }
     }
 
-    // Appliquer les changements fournis
-    Object.assign(contract, updateContractDto);
+    const updateData: any = { ...updateContractDto };
 
     // Si l'admin change le statut, enregistrer infos de validation
     const statutChange = updateContractDto.statut && updateContractDto.statut !== contract.statut;
     if (statutChange) {
-      if (updateContractDto.statut === ContractStatus.Approved || updateContractDto.statut === ContractStatus.Rejected) {
-        contract.dateValidation = new Date();
-        contract.validePar = user.userId;
+      if (updateContractDto.statut === ContractStatus.approved || updateContractDto.statut === ContractStatus.rejected) {
+        updateData.dateValidation = new Date();
+        updateData.validePar = user.userId;
       }
       // Si approuvé, récupérer et assigner les infos agence pour le PDF
-      if (updateContractDto.statut === ContractStatus.Approved && this.agenciesService) {
+      if (updateContractDto.statut === ContractStatus.approved && this.agenciesService) {
         try {
           const res = await this.agenciesService.findAll({ isActive: true, limit: 1 });
           const agency = res && res.data && res.data.length ? res.data[0] : null;
           if (agency) {
-            contract.agenceNom = agency.name || 'AutoDrive';
-            contract.agenceAdresse = agency.address ? `${agency.address}${agency.city ? ', ' + agency.city : ''}${agency.postalCode ? ' - ' + agency.postalCode : ''}` : 'Adresse non spécifiée';
-            contract.agenceTelephone = agency.phone || 'Téléphone non spécifié';
-            contract.agenceEmail = agency.email || process.env.MAIL_USER || 'Email non spécifié';
-            contract.agenceLogo = agency.logo || undefined;
+            updateData.agenceNom = agency.name || 'AutoDrive';
+            updateData.agenceAdresse = agency.address ? `${agency.address}${agency.city ? ', ' + agency.city : ''}${agency.postalCode ? ' - ' + agency.postalCode : ''}` : 'Adresse non spécifiée';
+            updateData.agenceTelephone = agency.phone || 'Téléphone non spécifié';
+            updateData.agenceEmail = agency.email || process.env.MAIL_USER || 'Email non spécifié';
+            updateData.agenceLogo = agency.logo || undefined;
           } else {
-            contract.agenceNom = 'AutoDrive';
-            contract.agenceAdresse = 'Adresse non spécifiée';
-            contract.agenceTelephone = 'Téléphone non spécifié';
-            contract.agenceEmail = 'Email non spécifié';
-            contract.agenceLogo = undefined;
+            updateData.agenceNom = 'AutoDrive';
+            updateData.agenceAdresse = 'Adresse non spécifiée';
+            updateData.agenceTelephone = 'Téléphone non spécifié';
+            updateData.agenceEmail = 'Email non spécifié';
+            updateData.agenceLogo = undefined;
           }
         } catch (e) {
-          contract.agenceNom = 'AutoDrive';
-          contract.agenceAdresse = 'Adresse non spécifiée';
-          contract.agenceTelephone = 'Téléphone non spécifié';
-          contract.agenceEmail = 'Email non spécifié';
-          contract.agenceLogo = undefined;
+          updateData.agenceNom = 'AutoDrive';
+          updateData.agenceAdresse = 'Adresse non spécifiée';
+          updateData.agenceTelephone = 'Téléphone non spécifié';
+          updateData.agenceEmail = 'Email non spécifié';
+          updateData.agenceLogo = undefined;
         }
       }
     }
 
-    const saved = await contract.save();
+    const saved = await this.prisma.contract.update({
+      where: { id },
+      data: updateData,
+      include: {
+        user: { select: { nom: true, prenom: true, email: true } },
+      },
+    });
 
     // Si le statut a changé, envoyer le mail de notification (ne doit pas bloquer la réponse)
     if (statutChange) {
       try {
-        const populated = await this.contractModel.findById(saved._id).populate('userId', 'nom prenom email').exec();
-        const userObj: any = populated?.userId || null;
+        const userObj = saved.user;
 
         // Récupérer l'agence active si possible
         let agency: any = null;
@@ -202,9 +214,9 @@ export class ContractsService {
           await this.mailService.sendContractValidation(
             userObj.email,
             `${userObj.nom || ''} ${userObj.prenom || ''}`.trim(),
-            saved.statut === ContractStatus.Approved,
-            saved._id.toString(),
-            agency || (saved as any).agenceNom ? { name: (saved as any).agenceNom, address: (saved as any).agenceAdresse, phone: (saved as any).agenceTelephone, email: (saved as any).agenceEmail } : null,
+            saved.statut === ContractStatus.approved,
+            saved.id.toString(),
+            agency || saved.agenceNom ? { name: saved.agenceNom, address: saved.agenceAdresse, phone: saved.agenceTelephone, email: saved.agenceEmail } : null,
             mapsUrl,
             updateContractDto.commentaires,
           );
@@ -217,7 +229,7 @@ export class ContractsService {
     return saved;
   }
 
-  async delete(id: string, user: any): Promise<void> {
+  async delete(id: number, user: any): Promise<void> {
     const contract = await this.findOne(id, user);
 
     // Seuls les admins peuvent supprimer définitivement
@@ -225,84 +237,92 @@ export class ContractsService {
       throw new ForbiddenException('Seul un administrateur peut supprimer un contrat');
     }
 
-    contract.deleted = true;
-    contract.deletedAt = new Date();
-    await contract.save();
+    await this.prisma.contract.update({
+      where: { id },
+      data: {
+        deleted: true,
+        deletedAt: new Date(),
+      },
+    });
   }
 
-  async validateContract(id: string, validateContractDto: ValidateContractDto, user: any): Promise<ContractDocument> {
+  async validateContract(id: number, validateContractDto: ValidateContractDto, user: any) {
     // Vérifier que l'utilisateur est admin
     if (user.role !== 'admin') {
       throw new ForbiddenException('Seul un administrateur peut valider ou rejeter un contrat');
     }
 
-    const contract = await this.contractModel.findById(id);
+    const contract = await this.prisma.contract.findUnique({
+      where: { id, deleted: false },
+      include: { user: { select: { nom: true, prenom: true, email: true } } },
+    });
 
-    if (!contract || contract.deleted) {
+    if (!contract) {
       throw new NotFoundException('Contrat introuvable');
     }
 
     // Vérifier que le contrat est en attente de validation
-    if (contract.statut !== ContractStatus.Pending) {
+    if (contract.statut !== ContractStatus.pending) {
       throw new BadRequestException('Ce contrat ne peut pas être validé ou rejeté (statut actuel: ' + contract.statut + ')');
     }
 
     // Appliquer la décision
-    if (validateContractDto.valider) {
-      contract.statut = ContractStatus.Approved;
-    } else {
-      contract.statut = ContractStatus.Rejected;
-    }
+    const newStatus = validateContractDto.valider ? ContractStatus.approved : ContractStatus.rejected;
 
-    // Ajouter les informations de validation
-    contract.dateValidation = new Date();
-    contract.validePar = user.userId;
+    const updateData: any = {
+      statut: newStatus,
+      dateValidation: new Date(),
+      validePar: user.userId,
+    };
+
     if (validateContractDto.commentaires) {
-      contract.commentaires = validateContractDto.commentaires;
+      updateData.commentaires = validateContractDto.commentaires;
     }
 
     // Récupérer l'agence active pour les informations du PDF (si approuvé)
     let agency: any = null;
     let mapsUrl: string | undefined = undefined;
-    if (contract.statut === ContractStatus.Approved && this.agenciesService) {
+    if (newStatus === ContractStatus.approved && this.agenciesService) {
       try {
         const res = await this.agenciesService.findAll({ isActive: true, limit: 1 });
         agency = res && res.data && res.data.length ? res.data[0] : null;
         if (agency) {
-          contract.agenceNom = agency.name || 'AutoDrive';
-          contract.agenceAdresse = agency.address ? `${agency.address}${agency.city ? ', ' + agency.city : ''}${agency.postalCode ? ' - ' + agency.postalCode : ''}` : 'Adresse non spécifiée';
-          contract.agenceTelephone = agency.phone || 'Téléphone non spécifié';
-          contract.agenceEmail = agency.email || process.env.MAIL_USER || 'Email non spécifié';
-          contract.agenceLogo = agency.logo || undefined;
+          updateData.agenceNom = agency.name || 'AutoDrive';
+          updateData.agenceAdresse = agency.address ? `${agency.address}${agency.city ? ', ' + agency.city : ''}${agency.postalCode ? ' - ' + agency.postalCode : ''}` : 'Adresse non spécifiée';
+          updateData.agenceTelephone = agency.phone || 'Téléphone non spécifié';
+          updateData.agenceEmail = agency.email || process.env.MAIL_USER || 'Email non spécifié';
+          updateData.agenceLogo = agency.logo || undefined;
           if (agency.location && agency.location.latitude && agency.location.longitude) {
             mapsUrl = `https://www.google.com/maps/search/?api=1&query=${agency.location.latitude},${agency.location.longitude}`;
           }
         }
       } catch (e) {
         // ignore agency lookup errors, use defaults
-        contract.agenceNom = 'AutoDrive';
-        contract.agenceAdresse = 'Adresse non spécifiée';
-        contract.agenceTelephone = 'Téléphone non spécifié';
-        contract.agenceEmail = 'Email non spécifié';
-        contract.agenceLogo = undefined;
+        updateData.agenceNom = 'AutoDrive';
+        updateData.agenceAdresse = 'Adresse non spécifiée';
+        updateData.agenceTelephone = 'Téléphone non spécifié';
+        updateData.agenceEmail = 'Email non spécifié';
+        updateData.agenceLogo = undefined;
       }
     }
 
-    const saved = await contract.save();
+    const saved = await this.prisma.contract.update({
+      where: { id },
+      data: updateData,
+      include: { user: { select: { nom: true, prenom: true, email: true } } },
+    });
 
     // Envoyer un email à l'utilisateur pour l'informer de la décision
     try {
-      // récupérer les informations utilisateur pour l'email
-      const populated = await this.contractModel.findById(saved._id).populate('userId', 'nom prenom email').exec();
-      const userObj: any = populated?.userId || null;
+      const userObj = saved.user;
 
       if (this.mailService && userObj && userObj.email) {
         await this.mailService.sendContractValidation(
           userObj.email,
           `${userObj.nom || ''} ${userObj.prenom || ''}`.trim(),
-          contract.statut === ContractStatus.Approved,
-          saved._id.toString(),
-          agency || (saved as any).agenceNom ? { name: (saved as any).agenceNom, address: (saved as any).agenceAdresse, phone: (saved as any).agenceTelephone, email: (saved as any).agenceEmail } : null,
+          saved.statut === ContractStatus.approved,
+          saved.id.toString(),
+          agency || saved.agenceNom ? { name: saved.agenceNom, address: saved.agenceAdresse, phone: saved.agenceTelephone, email: saved.agenceEmail } : null,
           mapsUrl,
           validateContractDto.commentaires,
         );
@@ -314,16 +334,16 @@ export class ContractsService {
     }
 
     // Si le contrat est approuvé et a un véhicule, créer automatiquement une réservation
-    if (contract.statut === ContractStatus.Approved && contract.vehicleId) {
+    if (saved.statut === ContractStatus.approved && saved.vehicleId) {
       try {
         await this.reservationService.create({
-          vehicleId: contract.vehicleId.toString(),
-          clientId: contract.userId.toString(),
-          dateDebut: contract.dateDebut.toISOString().split('T')[0], // Format YYYY-MM-DD
-          dateFin: contract.dateFin.toISOString().split('T')[0],
+          vehicleId: saved.vehicleId,
+          clientId: saved.userId,
+          dateDebut: saved.dateDebut.toISOString().split('T')[0], // Format YYYY-MM-DD
+          dateFin: saved.dateFin.toISOString().split('T')[0],
           codePromo: undefined,
         });
-        console.log(`Réservation créée automatiquement pour le contrat ${saved._id}`);
+        console.log(`Réservation créée automatiquement pour le contrat ${saved.id}`);
       } catch (err) {
         console.error('Erreur lors de la création automatique de la réservation:', err);
         // Ne pas bloquer l'approbation du contrat si la réservation échoue
@@ -333,11 +353,11 @@ export class ContractsService {
     return saved;
   }
 
-  async getContractForPDF(id: string, user: any): Promise<ContractDocument> {
+  async getContractForPDF(id: number, user: any) {
     const contract = await this.findOne(id, user);
 
     // Vérifier que le contrat est approuvé
-    if (contract.statut !== ContractStatus.Approved) {
+    if (contract.statut !== ContractStatus.approved) {
       throw new BadRequestException('Le contrat doit être approuvé pour générer un reçu');
     }
 
