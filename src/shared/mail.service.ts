@@ -10,23 +10,44 @@ export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
 
   constructor(private readonly agenciesService?: AgenciesService) {
+    const mailHost = process.env.MAIL_HOST || 'smtp.gmail.com';
+    const mailPort = Number(process.env.MAIL_PORT || '465');
+    const mailSecure = process.env.MAIL_SECURE
+      ? process.env.MAIL_SECURE === 'true'
+      : mailPort === 465;
+
     this.transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
+      host: mailHost,
+      port: mailPort,
+      secure: mailSecure,
       auth: {
         user: process.env.MAIL_USER,
         pass: process.env.MAIL_PASS,
       },
+      tls: {
+        rejectUnauthorized: false,
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
     });
+
+    this.logger.log(`SMTP config: ${mailHost}:${mailPort} secure=${mailSecure}`);
   }
 
   async onModuleInit() {
     try {
       await this.transporter.verify();
       this.logger.log('✅ Service SMTP prêt pour envoyer des mails');
-    } catch (error) {
-      this.logger.error('❌ Problème de connexion au service SMTP : ' + error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+          ? error
+          : JSON.stringify(error);
+
+      this.logger.error(`❌ Problème de connexion au service SMTP : ${errorMessage}`);
     }
   }
 
