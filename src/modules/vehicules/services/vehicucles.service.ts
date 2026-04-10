@@ -130,7 +130,11 @@ export class VehiclesService {
   async findAvailable(): Promise<Vehicle[]> {
     try {
       return await this.prisma.vehicle.findMany({
-        where: { deleted: false, disponible: true },
+        where: {
+          deleted: false,
+          disponible: true,
+          promotionCandidate: false,
+        },
       });
     } catch (error: unknown) {
       throw new InternalServerErrorException(
