@@ -23,9 +23,9 @@ export class ContractsService {
       throw new ForbiddenException('Seules les entreprises peuvent créer des contrats');
     }
 
-    // Vérifier que user.userId existe
-    if (!user.userId) {
-      throw new BadRequestException('Utilisateur non authentifié');
+    // Vérifier que user.userId existe et est valide
+    if (!user || !user.userId) {
+      throw new BadRequestException('Utilisateur non authentifié ou userId manquant');
     }
 
     // Vérifier que les dates sont valides
@@ -69,7 +69,7 @@ export class ContractsService {
 
     return await this.prisma.contract.create({
       data: {
-        userId: user.userId,
+        userId: parseInt(user.userId, 10), // Assurer que c'est un nombre
         vehicleId: createContractDto.vehicleId,
         dateDebut,
         dateFin,
@@ -87,11 +87,16 @@ export class ContractsService {
   }
 
   async findAll(user: any) {
+    // Vérifier que user.userId existe et est valide
+    if (!user || !user.userId) {
+      throw new BadRequestException('Utilisateur non authentifié ou userId manquant');
+    }
+
     const where: any = { deleted: false };
 
     // Si ce n'est pas un admin, ne montrer que ses propres contrats
     if (user.role !== 'admin') {
-      where.userId = user.userId;
+      where.userId = parseInt(user.userId, 10); // Assurer que c'est un nombre
     }
 
     return this.prisma.contract.findMany({
@@ -106,6 +111,11 @@ export class ContractsService {
   }
 
   async findOne(id: number, user: any) {
+    // Vérifier que user.userId existe et est valide
+    if (!user || !user.userId) {
+      throw new BadRequestException('Utilisateur non authentifié ou userId manquant');
+    }
+
     const contract = await this.prisma.contract.findUnique({
       where: { id, deleted: false },
       include: {
@@ -120,7 +130,7 @@ export class ContractsService {
     }
 
     // Vérifier que l'utilisateur peut voir ce contrat
-    if (user.role !== 'admin' && contract.userId !== user.userId) {
+    if (user.role !== 'admin' && contract.userId !== parseInt(user.userId, 10)) {
       throw new ForbiddenException('Accès non autorisé à ce contrat');
     }
 
@@ -152,7 +162,7 @@ export class ContractsService {
     if (statutChange) {
       if (updateContractDto.statut === ContractStatus.approved || updateContractDto.statut === ContractStatus.rejected) {
         updateData.dateValidation = new Date();
-        updateData.validePar = user.userId;
+        updateData.validePar = parseInt(user.userId, 10); // Assurer que c'est un nombre
       }
       // Si approuvé, récupérer et assigner les infos agence pour le PDF
       if (updateContractDto.statut === ContractStatus.approved && this.agenciesService) {
@@ -272,7 +282,7 @@ export class ContractsService {
     const updateData: any = {
       statut: newStatus,
       dateValidation: new Date(),
-      validePar: user.userId,
+      validePar: parseInt(user.userId, 10), // Assurer que c'est un nombre
     };
 
     if (validateContractDto.commentaires) {

@@ -50,6 +50,7 @@ export class ContractsController {
   @ApiOperation({ summary: 'Lister les contrats' })
   @ApiResponse({ status: 200, description: 'Liste des contrats retournée' })
   findAll(@CurrentUser() user: any) {
+    console.log('User from JWT:', user); // Debug log
     return this.contractsService.findAll(user);
   }
 
