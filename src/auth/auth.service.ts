@@ -38,8 +38,6 @@ export class AuthService {
     const hash = await bcrypt.hash(dto.motPasse, 10);
     const isAdmin = dto.role === Role.admin;
 
-    const verificationToken = isAdmin ? undefined : crypto.randomBytes(32).toString('hex');
-
     const user = await this.prisma.user.create({
       data: {
         nom: dto.nom,
@@ -52,20 +50,14 @@ export class AuthService {
         photo: photoUrl ?? dto.photo,
         role: dto.role as Role,
         isVerified: isAdmin ? true : false,
-        verificationToken,
-        verificationTokenExpires: isAdmin ? undefined : new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
 
-    if (!isAdmin && verificationToken) {
-      await this.mailService.sendVerificationEmail(user.email, verificationToken);
-    }
-
-    const { motPasse, verificationToken: _, verificationTokenExpires, ...safeUser } = user;
+    const { motPasse, verificationToken, verificationTokenExpires, ...safeUser } = user;
     return {
       message: isAdmin
         ? 'Utilisateur créé avec succès. Le compte admin est activé sans vérification email.'
-        : 'Utilisateur créé avec succès. Vérifiez votre email pour activer votre compte.',
+        : 'Utilisateur créé avec succès. Connectez-vous pour recevoir votre OTP de première connexion.',
       user: safeUser,
     };
   }

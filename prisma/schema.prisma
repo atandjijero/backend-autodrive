@@ -73,6 +73,7 @@ model Vehicle {
   deleted         Boolean       @default(false)
   deletedAt       DateTime?
   disponible      Boolean       @default(true)
+  promotionCandidate Boolean       @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   contracts       Contract[]

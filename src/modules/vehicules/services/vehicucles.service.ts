@@ -9,6 +9,9 @@ import { CreateVehicleDto } from 'src/modules/vehicules/dto/create-vehicule.dto'
 import { UpdateVehicleDto } from 'src/modules/vehicules/dto/update-vehicule.dto';
 import { AgenciesService } from '../../agencies/services/agencies.service';
 
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 @Injectable()
 export class VehiclesService {
   constructor(
@@ -30,12 +33,13 @@ export class VehiclesService {
           agenceId: activeAgency.id,
           deleted: false,
           disponible: true,
+          promotionCandidate: dto.promotionCandidate ?? false,
           photos: dto.photos ?? [],
         },
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new InternalServerErrorException(
-        `Erreur lors de la création du véhicule: ${error.message}`,
+        `Erreur lors de la création du véhicule: ${getErrorMessage(error)}`,
       );
     }
   }
@@ -43,9 +47,9 @@ export class VehiclesService {
   async findAll(): Promise<Vehicle[]> {
     try {
       return await this.prisma.vehicle.findMany({ where: { deleted: false } });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new InternalServerErrorException(
-        `Erreur lors de la récupération des véhicules: ${error.message}`,
+        `Erreur lors de la récupération des véhicules: ${getErrorMessage(error)}`,
       );
     }
   }
@@ -55,9 +59,9 @@ export class VehiclesService {
       return await this.prisma.vehicle.findMany({
         where: { deleted: false, prix: { lt: 20000 } },
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new InternalServerErrorException(
-        `Erreur lors de la récupération des promotions: ${error.message}`,
+        `Erreur lors de la récupération des promotions: ${getErrorMessage(error)}`,
       );
     }
   }
@@ -69,10 +73,10 @@ export class VehiclesService {
         throw new NotFoundException('Véhicule introuvable');
       }
       return vehicle;
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException(
-        `Erreur lors de la récupération du véhicule: ${error.message}`,
+        `Erreur lors de la récupération du véhicule: ${getErrorMessage(error)}`,
       );
     }
   }
@@ -87,10 +91,10 @@ export class VehiclesService {
         throw new NotFoundException('Véhicule introuvable');
       }
       return vehicle;
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException(
-        `Erreur lors de la mise à jour du véhicule: ${error.message}`,
+        `Erreur lors de la mise à jour du véhicule: ${getErrorMessage(error)}`,
       );
     }
   }
@@ -101,9 +105,9 @@ export class VehiclesService {
         where: { id },
         data: { deleted: true, deletedAt: new Date() },
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new InternalServerErrorException(
-        `Erreur lors de la suppression du véhicule: ${error.message}`,
+        `Erreur lors de la suppression du véhicule: ${getErrorMessage(error)}`,
       );
     }
   }
@@ -115,10 +119,10 @@ export class VehiclesService {
         where: { id },
         data: { photos: [...vehicle.photos, photoUrl] },
       });
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException(
-        `Erreur lors de l’ajout de la photo: ${error.message}`,
+        `Erreur lors de l’ajout de la photo: ${getErrorMessage(error)}`,
       );
     }
   }
@@ -128,9 +132,9 @@ export class VehiclesService {
       return await this.prisma.vehicle.findMany({
         where: { deleted: false, disponible: true },
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new InternalServerErrorException(
-        `Erreur lors de la récupération des véhicules disponibles: ${error.message}`,
+        `Erreur lors de la récupération des véhicules disponibles: ${getErrorMessage(error)}`,
       );
     }
   }
@@ -141,9 +145,9 @@ export class VehiclesService {
         where: { id },
         data: { disponible: false },
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new InternalServerErrorException(
-        `Erreur lors de la mise à jour de la disponibilité: ${error.message}`,
+        `Erreur lors de la mise à jour de la disponibilité: ${getErrorMessage(error)}`,
       );
     }
   }

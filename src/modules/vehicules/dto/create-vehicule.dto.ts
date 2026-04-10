@@ -1,6 +1,6 @@
-import { IsString, IsNumber, IsEnum, IsOptional, IsArray, Min } from 'class-validator';
+import { IsString, IsNumber, IsEnum, IsOptional, IsArray, Min, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export enum Transmission {
   MANUELLE = 'manuelle',
@@ -46,5 +46,11 @@ export class CreateVehicleDto {
 
   @ApiProperty({ example: 'TG-1234-AB', description: 'Immatriculation unique du véhicule' })
   @IsString()
-  immatriculation: string;
+  immatriculation!: string;
+
+  @ApiPropertyOptional({ example: false, description: 'Indique si le véhicule doit être proposé pour les promotions' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  promotionCandidate?: boolean;
 }
