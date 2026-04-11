@@ -354,7 +354,7 @@ export class AuthService {
       { expiresIn: '7d' }
     );
 
-    const frontendUrl = process.env.FRONTEND_URL || 'https://autodrive.com';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://backend-autodrive.onrender.com';
     const inviteLink = `${frontendUrl.replace(/\/$/, '')}/inscription?invite=${inviteToken}`;
 
     // Envoyer l'email
