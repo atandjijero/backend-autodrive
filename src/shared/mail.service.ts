@@ -573,7 +573,7 @@ export class MailService implements OnModuleInit {
 
   async sendCustomMail(to: string, subject: string, html: string) {
     const mailOptions: nodemailer.SendMailOptions = {
-      from: process.env.MAIL_FROM || 'noreply@autodrive.com',
+      from: `"AutoDrive Service" <${process.env.MAIL_FROM || process.env.MAIL_USER || 'noreply@autodrive.com'}>`,
       to,
       subject,
       html,
