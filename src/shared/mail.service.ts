@@ -570,4 +570,22 @@ export class MailService implements OnModuleInit {
       throw error;
     }
   }
+
+  async sendCustomMail(to: string, subject: string, html: string) {
+    const mailOptions: nodemailer.SendMailOptions = {
+      from: process.env.MAIL_FROM || 'noreply@autodrive.com',
+      to,
+      subject,
+      html,
+    };
+
+    try {
+      await this.sendMail(mailOptions);
+      this.logger.log(`✅ Email personnalisé envoyé à ${to}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+      this.logger.error(`❌ Erreur envoi email personnalisé à ${to}: ${errorMessage}`);
+      throw error;
+    }
+  }
 }

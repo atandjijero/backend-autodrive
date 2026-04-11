@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma.service';
@@ -64,9 +65,13 @@ export class AuthService {
 
   //  Connexion avec OTP si première fois
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email } }) as any;
     if (!user || !(await bcrypt.compare(dto.motPasse, user.motPasse))) {
       throw new UnauthorizedException('Identifiants invalides');
+    }
+
+    if (user.blocked) {
+      throw new ForbiddenException('Compte bloqué');
     }
 
     if (!user.isVerified) {
@@ -88,9 +93,16 @@ export class AuthService {
 
   //  Vérification OTP
   async verifyOtp(dto: VerifyOtpDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email } }) as any;
+    if (!user) {
+      throw new UnauthorizedException('OTP invalide ou expiré');
+    }
+
+    if (user.blocked) {
+      throw new ForbiddenException('Compte bloqué');
+    }
+
     if (
-      !user ||
       user.otpCode !== dto.otp ||
       !user.otpExpires || 
       user.otpExpires < new Date()
@@ -227,6 +239,137 @@ export class AuthService {
     if (!user) throw new NotFoundException('Utilisateur introuvable');
 
     return user;
+  }
+
+  async listUsers() {
+    return this.prisma.user.findMany({
+      where: { deleted: false },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        email: true,
+        telephone: true,
+        role: true,
+        isVerified: true,
+        blocked: true,
+        photo: true,
+        dateInscription: true,
+        updatedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async setUserBlocked(userId: string, blocked: boolean, currentUserRole?: string) {
+    // Les testeurs n'ont pas le droit de bloquer/débloquer des utilisateurs
+    if (currentUserRole === 'testeur') {
+      throw new ForbiddenException('Les testeurs n\'ont pas les permissions pour bloquer ou débloquer des utilisateurs');
+    }
+
+    const id = parseInt(userId, 10);
+    if (isNaN(id)) {
+      throw new BadRequestException('ID utilisateur invalide');
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        blocked,
+      },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        email: true,
+        telephone: true,
+        role: true,
+        isVerified: true,
+        blocked: true,
+        dateInscription: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async updateUserRole(userId: string, role: string, currentUserRole?: string) {
+    // Les testeurs n'ont pas le droit de modifier les rôles
+    if (currentUserRole === 'testeur') {
+      throw new ForbiddenException('Les testeurs n\'ont pas les permissions pour modifier les rôles des utilisateurs');
+    }
+
+    const id = parseInt(userId, 10);
+    if (isNaN(id)) {
+      throw new BadRequestException('ID utilisateur invalide');
+    }
+
+    const validRoles = ['admin', 'client', 'entreprise', 'tourist', 'testeur'];
+    if (!validRoles.includes(role)) {
+      throw new BadRequestException('Rôle invalide');
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        role: role as any,
+      },
+      select: {
+        id: true,
+        nom: true,
+        prenom: true,
+        email: true,
+        telephone: true,
+        role: true,
+        isVerified: true,
+        blocked: true,
+        dateInscription: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async inviteTester(email: string, currentUserRole?: string) {
+    // Les testeurs n'ont pas le droit d'envoyer des invitations
+    if (currentUserRole === 'testeur') {
+      throw new ForbiddenException('Les testeurs n\'ont pas les permissions pour envoyer des invitations');
+    }
+
+    // Vérifier si l'email est valide
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      throw new BadRequestException('Email invalide');
+    }
+
+    // Vérifier si l'utilisateur existe déjà
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+    if (existingUser) {
+      throw new BadRequestException('Un utilisateur avec cet email existe déjà');
+    }
+
+    // Générer un lien d'invitation
+    const inviteToken = this.jwt.sign(
+      { email, role: 'testeur', type: 'invite' },
+      { expiresIn: '7d' }
+    );
+
+    const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/inscription?invite=${inviteToken}`;
+
+    // Envoyer l'email
+    await this.mailService.sendCustomMail(
+      email,
+      'Invitation à tester AutoDrive',
+      `
+        <h1>Invitation à tester AutoDrive</h1>
+        <p>Vous avez été invité à tester notre application AutoDrive en tant que testeur.</p>
+        <p>Cliquez sur le lien ci-dessous pour vous inscrire :</p>
+        <a href="${inviteLink}">S'inscrire en tant que testeur</a>
+        <p>Ce lien expire dans 7 jours.</p>
+      `
+    );
+
+    return { message: 'Invitation envoyée avec succès' };
   }
 
   async updateProfile(userId: string, dto: UpdateUserDto, photoUrl?: string) {

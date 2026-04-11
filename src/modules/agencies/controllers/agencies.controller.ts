@@ -13,6 +13,7 @@ import { AgencyResponseDto } from '../dto/agency-response.dto';
 import { AgenciesListResponseDto } from '../dto/agencies-list-response.dto';
 import { JwtAuthGuard } from '../../../auth/jwt-auth.guard';
 import { AdminGuard } from '../../../auth/guards/admin.guard';
+import { CurrentUser } from '../../../auth/current-user.decorator';
 import { agencyStorage, agencyImageFileFilter } from '../upload.middleware';
 
 @ApiTags('Agencies')
@@ -127,8 +128,8 @@ export class AgenciesController {
   @ApiOperation({ summary: 'Supprimer une agence (Admin)' })
   @ApiParam({ name: 'id', description: 'ID de l\'agence' })
   @ApiResponse({ status: 200, description: 'Agence supprimée' })
-  async delete(@Param('id', ParseIntPipe) id: number) {
-    return this.agenciesService.delete(id);
+  async delete(@Param('id', ParseIntPipe) id: number, @CurrentUser() currentUser: any) {
+    return this.agenciesService.delete(id, currentUser.role);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)

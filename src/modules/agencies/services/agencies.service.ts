@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma.service';
 import { Agency } from '@prisma/client';
 import { CreateAgencyDto } from '../dto/create-agency.dto';
@@ -54,7 +54,12 @@ export class AgenciesService {
     }
   }
 
-  async delete(id: number): Promise<{ success: boolean }> {
+  async delete(id: number, currentUserRole?: string): Promise<{ success: boolean }> {
+    // Les testeurs n'ont pas le droit de supprimer des agences
+    if (currentUserRole === 'testeur') {
+      throw new ForbiddenException('Les testeurs n\'ont pas les permissions pour supprimer des agences');
+    }
+
     try {
       await this.prisma.agency.delete({ where: { id } });
       return { success: true };

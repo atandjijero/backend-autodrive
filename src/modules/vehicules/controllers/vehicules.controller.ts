@@ -20,6 +20,7 @@ import { CreateVehicleDto } from 'src/modules/vehicules/dto/create-vehicule.dto'
 import { UpdateVehicleDto } from 'src/modules/vehicules/dto/update-vehicule.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { AdminGuard } from 'src/auth/guards/admin.guard';
+import { CurrentUser } from 'src/auth/current-user.decorator';
 import { FilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { extname } from 'path';
@@ -121,8 +122,8 @@ export class VehiclesController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, AdminGuard)
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.vehiclesService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() currentUser: any) {
+    return this.vehiclesService.remove(id, currentUser.role);
   }
 
   @Post(':id/photo')

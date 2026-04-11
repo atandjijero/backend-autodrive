@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma.service';
 import { Vehicle } from '@prisma/client';
@@ -99,7 +100,12 @@ export class VehiclesService {
     }
   }
 
-  async remove(id: number): Promise<Vehicle> {
+  async remove(id: number, currentUserRole?: string): Promise<Vehicle> {
+    // Les testeurs n'ont pas le droit de supprimer des véhicules
+    if (currentUserRole === 'testeur') {
+      throw new ForbiddenException('Les testeurs n\'ont pas les permissions pour supprimer des véhicules');
+    }
+
     try {
       return await this.prisma.vehicle.update({
         where: { id },

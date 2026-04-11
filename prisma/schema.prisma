@@ -23,6 +23,7 @@ model User {
   otpCode                  String?
   otpExpires               DateTime?
   isVerified               Boolean       @default(false)
+  blocked                  Boolean       @default(false)
   resetPasswordToken       String?
   resetPasswordExpires     DateTime?
   verificationToken        String?
@@ -218,6 +219,7 @@ enum Role {
   client
   entreprise
   tourist
+  testeur
 }
 
 enum StatutReservation {

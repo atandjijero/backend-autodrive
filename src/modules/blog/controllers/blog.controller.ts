@@ -5,6 +5,7 @@ import { CreatePostDto } from '../dto/create-post.dto';
 import { UpdatePostDto } from '../dto/update-post.dto';
 import { JwtAuthGuard } from '../../../auth/jwt-auth.guard';
 import { AdminGuard } from '../../../auth/guards/admin.guard';
+import { CurrentUser } from '../../../auth/current-user.decorator';
 import { storage, imageFileFilter } from '../upload.middleware';
 
 @Controller()
@@ -105,8 +106,8 @@ export class BlogController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete('admin/blog/:id')
-  async remove(@Param('id') id: string) {
-    return this.blogService.delete(id);
+  async remove(@Param('id') id: string, @CurrentUser() currentUser: any) {
+    return this.blogService.delete(id, currentUser.role);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)

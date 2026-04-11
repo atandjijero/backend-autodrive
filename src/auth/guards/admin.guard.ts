@@ -15,10 +15,11 @@ export class AdminGuard implements CanActivate {
 
     /**
      * Dans AutoDrive :
-     * - Seuls les utilisateurs avec le rôle ADMIN ont accès complet
+     * - Les utilisateurs avec le rôle ADMIN ont accès complet
+     * - Les utilisateurs avec le rôle TESTEUR ont accès complet pour tester l'application
      * - Les autres rôles (Client, Entreprise, Tourist) sont restreints
      */
-    const allowedRoles: Role[] = [Role.admin];
+    const allowedRoles: Role[] = [Role.admin, Role.testeur];
 
     if (!allowedRoles.includes(currentUser.role)) {
       throw new ForbiddenException(

@@ -7,6 +7,7 @@ import * as ms from 'ms';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { AdminGuard } from './guards/admin.guard';
 import { MailModule } from '../shared/mail.module';
 import { CloudinaryModule } from '../shared/cloudinary.module';
 
@@ -33,7 +34,7 @@ import { CloudinaryModule } from '../shared/cloudinary.module';
     MailModule,
     CloudinaryModule,
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, AdminGuard],
   controllers: [AuthController],
   exports: [AuthService],
 })

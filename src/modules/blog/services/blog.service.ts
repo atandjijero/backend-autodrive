@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma.service';
 import { PostStatus } from '@prisma/client';
 import { CreatePostDto } from '../dto/create-post.dto';
@@ -49,7 +49,12 @@ export class BlogService {
     }
   }
 
-  async delete(id: string) {
+  async delete(id: string, currentUserRole?: string) {
+    // Les testeurs n'ont pas le droit de supprimer des articles de blog
+    if (currentUserRole === 'testeur') {
+      throw new ForbiddenException('Les testeurs n\'ont pas les permissions pour supprimer des articles de blog');
+    }
+
     try {
       await this.prisma.post.delete({
         where: { id: parseInt(id) },
