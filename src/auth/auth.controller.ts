@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, Patch, Param, ParseIntPipe, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Body, Controller, Post, Get, Patch, Delete, Param, ParseIntPipe, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { ApiTags, ApiBody, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
@@ -9,7 +9,7 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
-import { AdminGuard } from './guards/admin.guard';
+import { AdminGuard, StrictAdminGuard } from './guards/admin.guard';
 import { CurrentUser } from './current-user.decorator';
 
 @ApiTags('auth')
@@ -126,7 +126,7 @@ export class AuthController {
   }
 
   @Patch('users/:id/block')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, StrictAdminGuard)
   @ApiBearerAuth()
   @ApiResponse({ status: 200, description: 'Utilisateur bloqué' })
   async blockUser(@Param('id', ParseIntPipe) id: number, @CurrentUser() currentUser: any) {
@@ -134,7 +134,7 @@ export class AuthController {
   }
 
   @Patch('users/:id/unblock')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, StrictAdminGuard)
   @ApiBearerAuth()
   @ApiResponse({ status: 200, description: 'Utilisateur débloqué' })
   async unblockUser(@Param('id', ParseIntPipe) id: number, @CurrentUser() currentUser: any) {
@@ -142,7 +142,7 @@ export class AuthController {
   }
 
   @Patch('users/:id/role')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, StrictAdminGuard)
   @ApiBearerAuth()
   @ApiBody({ schema: { type: 'object', properties: { role: { type: 'string' } } } })
   @ApiResponse({ status: 200, description: 'Rôle mis à jour' })
@@ -155,11 +155,27 @@ export class AuthController {
   }
 
   @Post('invite-tester')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, StrictAdminGuard)
   @ApiBearerAuth()
   @ApiBody({ schema: { type: 'object', properties: { email: { type: 'string' } } } })
   @ApiResponse({ status: 201, description: 'Invitation envoyée' })
   async inviteTester(@Body('email') email: string, @CurrentUser() currentUser: any) {
     return this.auth.inviteTester(email, currentUser.role);
+  }
+
+  @Delete('users/:id')
+  @UseGuards(JwtAuthGuard, StrictAdminGuard)
+  @ApiBearerAuth()
+  @ApiResponse({ status: 200, description: 'Utilisateur supprimé' })
+  async deleteUser(@Param('id', ParseIntPipe) id: number, @CurrentUser() currentUser: any) {
+    return this.auth.deleteUser(id.toString(), currentUser.role);
+  }
+
+  @Delete('profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiResponse({ status: 200, description: 'Compte supprimé' })
+  async deleteOwnAccount(@CurrentUser() currentUser: any) {
+    return this.auth.deleteUser(currentUser.userId, currentUser.role);
   }
 }

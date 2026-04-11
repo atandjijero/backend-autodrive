@@ -58,7 +58,7 @@ export class AuthService {
     return {
       message: isAdmin
         ? 'Utilisateur créé avec succès. Le compte admin est activé sans vérification email.'
-        : 'Utilisateur créé avec succès. Connectez-vous pour recevoir votre OTP de première connexion.',
+        : 'Utilisateur créé avec succès. Connectez-vous !',
       user: safeUser,
     };
   }
@@ -354,18 +354,58 @@ export class AuthService {
       { expiresIn: '7d' }
     );
 
-    const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/inscription?invite=${inviteToken}`;
+    const frontendUrl = process.env.FRONTEND_URL || 'https://autodrive.com';
+    const inviteLink = `${frontendUrl.replace(/\/$/, '')}/inscription?invite=${inviteToken}`;
 
     // Envoyer l'email
     await this.mailService.sendCustomMail(
       email,
-      'Invitation à tester AutoDrive',
+      'Invitation exclusive à rejoindre AutoDrive',
       `
-        <h1>Invitation à tester AutoDrive</h1>
-        <p>Vous avez été invité à tester notre application AutoDrive en tant que testeur.</p>
-        <p>Cliquez sur le lien ci-dessous pour vous inscrire :</p>
-        <a href="${inviteLink}">S'inscrire en tant que testeur</a>
-        <p>Ce lien expire dans 7 jours.</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;font-family:Arial,sans-serif;color:#333;">
+          <tr>
+            <td style="background:#004080;color:#fff;padding:20px;text-align:center;font-size:22px;font-weight:bold;">
+              AutoDrive
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:26px;">
+              <p style="font-size:16px;margin-bottom:16px;">Bonjour,</p>
+              <p style="font-size:15px;line-height:1.6;margin-bottom:18px;">
+                Vous êtes invité à découvrir AutoDrive en tant que <strong>testeur privilégié</strong>.
+                Rejoignez notre équipe pour tester les dernières fonctionnalités de l’application et nous aider à améliorer l’expérience utilisateur.
+              </p>
+              <p style="font-size:15px;line-height:1.6;margin-bottom:24px;">
+                Cliquez sur le bouton ci-dessous pour finaliser votre inscription :
+              </p>
+              <p style="text-align:center;margin:24px 0;">
+                <table align="center" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td bgcolor="#004080" style="border-radius:6px;">
+                      <a href="${inviteLink}" target="_blank" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:bold;color:#fff;text-decoration:none;">
+                        S'inscrire en tant que testeur
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </p>
+              <p style="font-size:14px;color:#555;line-height:1.6;margin-bottom:16px;">
+                Ce lien est valable pendant <strong>7 jours</strong>. Après cette date, vous devrez demander une nouvelle invitation.
+              </p>
+              <p style="font-size:14px;color:#555;line-height:1.6;">
+                Merci de votre intérêt pour AutoDrive. Nous sommes impatients de vous compter parmi nos testeurs.
+              </p>
+              <p style="margin-top:28px;font-size:14px;">
+                Cordialement,<br/><strong>L'équipe AutoDrive</strong>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f5f5f5;text-align:center;padding:14px;font-size:12px;color:#888;">
+              © ${new Date().getFullYear()} AutoDrive. Tous droits réservés.
+            </td>
+          </tr>
+        </table>
       `
     );
 
@@ -413,5 +453,40 @@ export class AuthService {
 
   async uploadProfilePhoto(file: Express.Multer.File): Promise<string> {
     return this.cloudinaryService.uploadImage(file, 'profile_pictures');
+  }
+
+  async deleteUser(userId: string, currentUserRole: Role) {
+    const id = parseInt(userId);
+    if (isNaN(id)) {
+      throw new BadRequestException('ID utilisateur invalide');
+    }
+
+    // Vérifier que l'utilisateur existe
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    // Empêcher la suppression d'un admin par quelqu'un d'autre qu'un admin
+    if (user.role === Role.admin && currentUserRole !== Role.admin) {
+      throw new ForbiddenException('Seul un administrateur peut supprimer un autre administrateur');
+    }
+
+    // Empêcher la suppression de soi-même si on n'est pas admin (sauf si c'est un auto-suppression)
+    if (user.id === parseInt(userId) && currentUserRole !== Role.admin) {
+      // Pour l'auto-suppression, on permet
+    } else if (currentUserRole !== Role.admin) {
+      throw new ForbiddenException('Vous n\'avez pas les permissions pour supprimer cet utilisateur');
+    }
+
+    // Supprimer l'utilisateur
+    await this.prisma.user.delete({
+      where: { id },
+    });
+
+    return { message: 'Utilisateur supprimé avec succès' };
   }
 }

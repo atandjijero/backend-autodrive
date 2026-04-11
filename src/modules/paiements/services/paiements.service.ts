@@ -69,7 +69,7 @@ export class PaiementsService {
           promotionId = reservation.promotionId;
         } catch (error) {
           // Si la promotion n'est plus valide, on continue sans remise
-          console.warn('Promotion non applicable:', error.message);
+          console.warn('Promotion non applicable:', error instanceof Error ? error.message : String(error));
         }
       }
 
@@ -91,6 +91,8 @@ export class PaiementsService {
       const saved = await this.prisma.paiement.create({
         data: {
           reservationId: data.reservationId,
+          nom: data.nom,
+          email: data.email,
           montant: montantFinal,
           methodePaiement: data.methodePaiement as MethodePaiement,
           statut: StatutPaiement.reussi,
@@ -116,7 +118,7 @@ export class PaiementsService {
         throw error;
       }
       throw new InternalServerErrorException(
-        "Erreur lors du traitement du paiement : " + error.message,
+        "Erreur lors du traitement du paiement : " + (error instanceof Error ? error.message : String(error)),
       );
     }
   }

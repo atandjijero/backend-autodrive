@@ -30,3 +30,35 @@ export class AdminGuard implements CanActivate {
     return true;
   }
 }
+
+@Injectable()
+export class StrictAdminGuard implements CanActivate {
+  /**
+   * Strictly admin only - for sensitive operations like:
+   * - Blocking/Unblocking users
+   * - Deleting users
+   * - Inviting users
+   * - Managing roles
+   * 
+   * Testeurs are NOT allowed to perform these actions
+   */
+  canActivate(context: ExecutionContext): boolean {
+    const request: Request = context.switchToHttp().getRequest();
+    const currentUser = request.user as AuthenticatedUser; 
+
+    // Vérification de l'authentification
+    if (!currentUser) {
+      throw new ForbiddenException('Utilisateur non authentifié');
+    }
+
+    // Only admin role allowed - testeur is NOT allowed
+    if (currentUser.role !== Role.admin) {
+      throw new ForbiddenException(
+        'Cette action est réservée aux administrateurs uniquement'
+      );
+    }
+
+    return true;
+  }
+}
+

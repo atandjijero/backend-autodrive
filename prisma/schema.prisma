@@ -144,6 +144,8 @@ model Contract {
 model Paiement {
   id              Int             @id @default(autoincrement())
   reservationId   Int
+  nom             String          @default("Client inconnu")
+  email           String          @default("")
   montant         Float
   statut          StatutPaiement
   methodePaiement MethodePaiement
