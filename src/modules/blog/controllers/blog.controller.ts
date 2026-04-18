@@ -26,7 +26,7 @@ export class BlogController {
   private mapPostToFront(p: any) {
     if (!p) return null;
     return {
-      id: p._id?.toString(),
+      id: p.id?.toString(),
       titre: p.title,
       categorie: (p.tags && p.tags[0]) || 'Actualité',
       extrait: p.excerpt || '',
