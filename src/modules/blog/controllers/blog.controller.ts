@@ -6,11 +6,14 @@ import { UpdatePostDto } from '../dto/update-post.dto';
 import { JwtAuthGuard } from '../../../auth/jwt-auth.guard';
 import { AdminGuard } from '../../../auth/guards/admin.guard';
 import { CurrentUser } from '../../../auth/current-user.decorator';
-import { storage, imageFileFilter } from '../upload.middleware';
+import { CloudinaryService } from '../../../shared/cloudinary.service';
 
 @Controller()
 export class BlogController {
-  constructor(private readonly blogService: BlogService) {}
+  constructor(
+    private readonly blogService: BlogService,
+    private readonly cloudinaryService: CloudinaryService
+  ) {}
 
   // helper simple slug generator from french title
   private slugify(text: string) {
@@ -119,14 +122,13 @@ export class BlogController {
 
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('admin/blog/upload')
-  @UseInterceptors(FileInterceptor('featuredImage', { storage, fileFilter: imageFileFilter }))
+  @UseInterceptors(FileInterceptor('featuredImage'))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
-    console.log('Upload file:', file); // debug log
     if (!file) {
       throw new Error('No file uploaded');
     }
-    // Changé le chemin de /uploads/vehicles/ à /uploads/
-    return { url: `/uploads/${file.filename}`, filename: file.filename };
+    const url = await this.cloudinaryService.uploadImage(file, 'blog_posts');
+    return { url };
   }
 
   // Dans BlogController, ajoutez après les autres routes admin
